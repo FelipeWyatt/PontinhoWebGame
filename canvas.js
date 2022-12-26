@@ -122,7 +122,6 @@ class Card {
     }
 
     update(){
-        this.draw()
         if (this.grab.movable && this.grab.holding){
             this.newPos(mouseX - this.grab.dx , mouseY - this.grab.dy)
         }
@@ -140,40 +139,96 @@ class Card {
         } else {
             this.y = this.yTarget
         }
+        this.draw()
     }
   
 }
 
-class Deck {
-    constructor(cards = freshDeck(), x = 0, y = 0) {
+class Stack {
+    constructor(cards = [], x = 0, y = 0, flipped = false, orientation = 'down', movable = false) {
         this.cards = cards
         this.x = x
         this.y = y
-        this.cards.forEach(card => {card.x = this.x; card.y = this.y;})
-        this.shuffle();
+        this.flipped = flipped
+        this.orientation = orientation
+        this.movable = movable
+        // cards gets this object caracteristics
+        this.cards.forEach(card => {
+            card.flipped = this.flipped;
+            card.orientation = this.orientation;
+            card.grab.movable = this.movable;
+          });
+        
     }
-  
-    get numberOfCards() {
+    
+    numberOfCards() {
         return this.cards.length
     }
 
-    buy(nCards = 1){
-        if (nCards == 1){
-            return this.cards.shift()
-        } else {
-            let l = []
-            for (let i = 0; i < nCards; i++){
-                l.push(this.cards.shift())
-            }
-            return l
+    add(card) {
+        // Set the Stack caracteristics to the card and add it to the end of the array
+        card.flipped = this.flipped
+        card.orientation = this.orientation
+        card.grab.movable = this.movable
+        this.cards.push(card)
+    }
+  
+    remove(card) {
+        // Remove specific card of array
+        if (this.cards.includes(card)) {
+            const index = this.cards.indexOf(card)
+            return this.cards.splice(index, 1)[0]
         }
-        
+        return false
+    }
+
+    buy(nCards = 1){
+        // Remove and return last nCards of array
+        if (nCards == 1){
+            return this.cards.pop()
+        } else {
+            const removedCards = [];
+            for (let i = 0; i < nCards; i++) {
+                removedCards.push(this.cards.pop())
+            }
+            return removedCards;
+        }
+    }
+  
+    
+    update() {
+        if (this.numberOfCards() > 0) {
+            this.cards.forEach(card => {card.update();})
+        }
+    }
+}
+  
+
+
+class Deck extends Stack{
+    
+    static hSpacing = 8
+    static vSpacing = 2
+
+    constructor(cards = freshDeck(), x = 0, y = 0) {
+        super(cards, x, y, false, 'down', false)
+        this.cards.forEach(card => {card.x = this.x; card.y = this.y;})
+        this.shuffle()
+    }
+
+    insideDeck(x, y){
+        if (x > this.x && x < this.x + Card.w + 2*Deck.hSpacing){
+            if (y > this.y && y < this.y + Card.h + 2*Deck.vSpacing){
+                return true
+            }
+        }
+        return false
     }
 
   
     shuffle() {
         // Randomize array in-place using Durstenfeld shuffle algorithm
-        for (let i = this.numberOfCards - 1; i > 0; i--) {
+        for (let i = this.numberOfCards() - 1; i > 0; i--) {
             const newIndex = Math.floor(Math.random() * (i + 1))
             const oldValue = this.cards[newIndex]
             this.cards[newIndex] = this.cards[i]
@@ -184,14 +239,12 @@ class Deck {
 
 
     draw() {
-        let hSpacing = 8
-        let vSpacing = 2
-        let n = this.numberOfCards
+        let n = this.numberOfCards()
         if (n > 3) {n = 3}
         else if (n <= 0) {return null}
 
         for (let i = 0; i < n; i++){
-            this.cards[i].newPos(this.x + hSpacing*i, this.y + vSpacing*i)
+            this.cards[i].newPos(this.x + Deck.hSpacing*i, this.y + Deck.vSpacing*i)
             this.cards[i].draw()
         }
     }
@@ -201,26 +254,25 @@ class Deck {
     }
 }
 
-class Discards {
+class Discards extends Stack{
     static scatter_radius = 60
 
     constructor(x = 0, y = 0) {
-        this.cards = []
-        this.x = x
-        this.y = y
+        super([], x, y, true, 'down', false)
         // Can only buy the top card
         this.buyable = false
     }
-  
-    get numberOfCards() {
-        return this.cards.length
+
+    lastCard(){
+        return this.cards[this.cards.length - 1]
     }
   
-    buyLastCard() {
+  
+    buy() {
         // Return the top card
         if (this.buyable){
             this.buyable = false
-            return this.cards.shift()
+            return super.buy()
         } else {
             return false
         }
@@ -230,47 +282,42 @@ class Discards {
         // Add card to the end of the array
         let loc = randomPointInCircle(this.x, this.y, Discards.scatter_radius)
         card.newTargetPos(loc.x, loc.y)
-        card.grab.movable = false
-        card.flipped  = true
-        card.orientation = 'down'
-        this.cards.push(card)
+        super.add(card)
         this.buyable = true
     }
-  
-    newPos(x, y){
-        this.x = x
-        this.y = y
+
+    insideArea(x, y) {
+        const distance = Math.sqrt((x - this.x) ** 2 + (y - this.y) ** 2);
+        // Verifica se a distância é menor ou igual ao raio do círculo
+        return distance <= Discards.scatter_radius;
     }
 
     update(){
-        this.cards.forEach(card => {card.update();})
+        super.update()
     }
 }
 
 
 
-class Hand {
+class Hand extends Stack{
     constructor(cards = [], x = 0, y = 0, flipped = false, movable = false, orientation = 'down', spacing = Card.w + 2) {
-        this.cards = cards
-        this.x = x
-        this.y = y
-        this.flipped = flipped
-        this.movable = movable
-        this.orientation = orientation
+        super(cards, x, y, flipped, orientation, movable)
         this.spacing = spacing
-        this.cards.forEach(card => {
-            card.flipped = this.flipped;
-            card.grab.movable = this.movable;
-            card.orientation = this.orientation;
-          });
-        
-    }
-
-    discard() {
-        // Return the top card
-        return this.cards.shift()
     }
     
+    chooseRandomCard(){
+        // Return a random choice of card
+        const index = Math.floor(Math.random() * this.numberOfCards())
+        return this.cards[index]
+    }
+
+    removeRandomCard(){
+        // Remove and return a random card
+        const index = Math.floor(Math.random() * this.numberOfCards())
+        return this.cards.splice(index, 1)[0]
+    }
+   
+
     update(){
         // Ordena vetor das cartas pela posição em x
         this.cards.sort(function(card1, card2){
@@ -291,10 +338,11 @@ class Hand {
             }
         }
 
-        this.cards.forEach(card => {card.update();})
-        
+        super.update()
     }
 }
+
+
 
 class Bot {
     constructor(cards, x, y, orientation = 'up'){
@@ -320,6 +368,89 @@ class Player {
     update(){
         this.hand.update()
     }
+}
+
+class Round{// Classe static pois não é necessário estanciá-la
+    static deck
+    static discardPile
+    static player
+    static bots
+    static elements
+    static order
+    static turn
+    static phase // buy, drop and discard
+
+    static init(){
+        // Begin round
+        Round.deck = new Deck(freshDeck(), 120, 160)
+        Round.discardPile = new Discards(240, 160)
+
+        Round.player = new Player(Round.deck.buy(9), 200, 400 - (Card.h + 10))
+        const bot1 = new Bot(Round.deck.buy(9), 200, 10, 'up')
+        const bot2 = new Bot(Round.deck.buy(9), 10, 200, 'left')
+        const bot3 = new Bot(Round.deck.buy(9), 400 - (Card.w + 10), 200, 'right')
+        Round.bots = [bot1, bot2, bot3]
+        Round.elements = [Round.deck, Round.discardPile, Round.player, bot1, bot2, bot3]
+
+        Round.order = [Round.player, bot2, bot1, bot3] // sentido horário
+        Round.turn = Round.order[0]
+        Round.phase = 'buy'
+    }
+
+    static turnBoughtCard(from = 'deck'){
+        // player or bot of turn took an action to buy from deck or discardPile
+        if (from == 'deck'){
+            console.log(Round.deck.buy())
+            Round.turn.hand.add(Round.deck.buy())
+        } else if (from == 'discardPile' && Round.discardPile.buyable) {
+            Round.turn.hand.add(Round.discardPile.buy())
+        } else {
+            return false
+        }
+        Round.phase = 'drop'
+        return true
+    }
+
+    static turnDroppedCombination(){
+        
+
+    }
+
+    static turnDiscardedCard(card){
+        Round.discardPile.add(Round.turn.hand.remove(card))
+        Round.endTurn()
+    }
+
+    static endTurn() { // Finaliza o turno atual
+        const currentIndex = Round.order.indexOf(Round.turn)
+    
+        if (currentIndex == Round.order.length - 1) {
+            Round.turn = Round.order[0]
+        } else {
+            Round.turn = Round.order[currentIndex + 1]
+        }
+        Round.phase = 'buy'
+        if (Round.bots.includes(Round.turn)) {
+            // O bot joga
+            Round.botPlay()
+        }
+    }
+    
+    static botPlay(){
+        if (Round.phase == 'buy'){
+            setTimeout(function() { 
+                Round.turnBoughtCard('deck');
+
+                setTimeout(function() { 
+                    Round.turnDiscardedCard(Round.turn.hand.chooseRandomCard())
+                }, 1000);
+                
+            }, 1000);
+        }
+        // Waits 1 s to execute function
+        
+    }
+
 }
 
 //----------------------------AUX FUNCTIONS--------------------------
@@ -375,19 +506,8 @@ function randomPointInCircle(centerX, centerY, maxRadius) {
 
 //---------------------------------MAIN------------------------------
 
-
-const deck = new Deck(freshDeck(), 120, 160)
-
-const discardPile = new Discards(240, 160)
-
-const bot1 = new Bot(deck.buy(9), 200, 10, 'up')
-const bot2 = new Bot(deck.buy(9), 10, 200, 'left')
-const bot3 = new Bot(deck.buy(9), 400 - (Card.w + 10), 200, 'right')
-
-const p1 = new Player(deck.buy(9), 200, 400 - (Card.h + 10))
-
-const elements = [deck, discardPile, bot1, bot2, bot3, p1]
-
+Round.init()
+console.log(Round.elements)
 
 function animate(){ // default FPS = 60
     // setup block
@@ -395,7 +515,7 @@ function animate(){ // default FPS = 60
     c.clearRect(0, 0, innerWidth, innerHeight)
     // setup block end
 
-    elements.forEach(elem => {elem.update()})
+    Round.elements.forEach(elem => {elem.update()})
     // desenha a carta segurada por ultimo para ficar em primeiro
     if (holdingCard != null){
         holdingCard.draw()
@@ -407,16 +527,26 @@ animate()
 
 
 addEventListener('mousedown', (event) => {
-    discardPile.add(deck.buy())
-
     mouseDown = true
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
+    // Check if click was to buy
+    if (Round.turn == Round.player && Round.phase == 'buy'){
+        if (Round.deck.insideDeck(x, y)){
+            Round.turnBoughtCard('deck')
+            return
+        } else if (Round.discardPile.buyable && Round.discardPile.lastCard().insideCard(x, y)){
+            Round.turnBoughtCard('discardPile')
+            return
+        }
+    }
+    
+    // Check if click was on movable card
     holdingCard = null
     let dx, dy, minDx = 99999, minDy
-    for (let card of p1.hand.cards){
+    for (let card of Round.player.hand.cards){
         if (card.grab.movable && card.insideCard(x, y)){
             dx = x - card.x
             dy = y - card.y
@@ -433,17 +563,21 @@ addEventListener('mousedown', (event) => {
         holdingCard.grab.dx = minDx
         holdingCard.grab.dy = minDy
     }
+    
 })
 
 addEventListener('mouseup', () => {
     mouseDown = false
     if (holdingCard != null){
         holdingCard.grab.holding = false
+        if (Round.phase == 'drop' && Round.discardPile.insideArea(mouseX, mouseY)){
+            Round.turnDiscardedCard(holdingCard)
+        }
         holdingCard = null
     }
     
     // reorganiza posicao das cartas
-    p1.hand.update()
+    Round.player.update()
 })
 
 addEventListener('mousemove', (event) => {
