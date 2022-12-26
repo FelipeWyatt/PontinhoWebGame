@@ -338,13 +338,7 @@ function freshDeck() {
         })
     });
 
-    let d3 = SUITS.flatMap(suit => {
-        return VALUES.map(value => {
-            return new Card(value, suit)
-        })
-    });
-
-    let deck =  d1.concat(d2).concat(d3)
+    let deck =  d1.concat(d2)
     // Remove 5 joker para ter 3 no total
     for (let i = 0; i < 5; i++){
         let index = deck.findIndex(card => card.value == "joker")
