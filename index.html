@@ -4,19 +4,135 @@
     <meta charset="UTF-8">
     <title>Pontinho</title>
     <style type="text/css">
+        body { 
+            margin: 10; 
+        } 
+
         canvas {
             border: 1px solid black;
             background:  #35954d ; 
             /* background : #0c3a80; */
         } 
-        body { 
-            margin: 10; 
-        } 
+
+        .container tr{
+            vertical-align: top;
+            height: 200px;
+        }
+
+        .container tr tr{
+            height: 24px;
+        }
+
+        .scoreTables, .lifeTable, .attributes{
+            border-style: hidden;
+            border-collapse: collapse;
+        }
+
+        .attributes {
+            text-align: left;
+            border: 0;
+        }
+
+        
+        .attributes td, .attributes th {
+            border-collapse: collapse;
+            border-spacing: 0;
+            border : 1px solid black;
+        }
+
+        .lifeTable td {
+            border-top: 0;
+            border-bottom: 0;
+        }
+
+        .lifeTable td, .lifeTable th, .lifeTable tr{
+            text-align: center;
+            border-collapse: collapse;
+            border-spacing: 0;
+            border: 2px solid black;
+        }
+        
+        
     </style> 
 </head>
 <body>
-    <canvas></canvas> 
+    <table class="container">
+      <thead>
+        <tr> 
+          <th> 
+            <canvas></canvas> 
+          </th>
+          <th> 
+            <table class="scoreTables">
+              <tbody>
+                <tr>
+                  <td>
+                    <table class="attributes">
+                      <thead>
+                        <tr>
+                          <th>Attribute</th>
+                          <th>Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>deck</td>
+                          <td id="deck"> </td>
+                        </tr>
+                        <tr>
+                          <td>discardPile</td>
+                          <td id="discardPile"> </td>
+                        </tr>
+                        <tr>
+                          <td>turn</td>
+                          <td id="turn"> </td>
+                        </tr>
+                        <tr>
+                          <td>phase</td>
+                          <td id="phase"> </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+                    <tr></tr>
+                <tr>
+                  <td>
+                    <table class="lifeTable">
+                      <thead>
+                        <tr>
+                          <th>Player</th>
+                          <th>Bot 1</th>
+                          <th>Bot 2</th>
+                          <th>Bot 3</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>99<br>-14</br></td>
+                          <td>99<br>-35</br></td>
+                          <td>99<br>-64</br></td>
+                          <td>99<br>-55</br></td>
+                        </tr>
+                        <tr>
+                            <td>85</td>
+                            <td>64</td>
+                            <td>35</td>
+                            <td>44</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </th>
+        </tr>
+      </thead>
+    </table>
+  
     <script src="canvas.js" type="module"></script>
     <!-- <script src="chatGPT3_tests.js" type="module"></script>  -->
-</body> 
+  </body> 
+  
 </html> 
