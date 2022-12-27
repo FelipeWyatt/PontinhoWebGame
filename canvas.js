@@ -2,14 +2,20 @@
 // import ace from './img/png/1x/spade_1.png'
 const ace = new Image() // Create new img element
 ace.src = "./img/png/1x/spade_1.png" // Set source path
+// to draw the image
+// c.drawImage(ace, 0, 0, ace.width, ace.height, this.x , this.y, Card.w, Card.h)
+            
 
 //---------------------------CANVAS SETUP---------------------------------
 const canvas = document.querySelector('canvas')
 
-canvas.height = 400 //window.innerHeight;
-canvas.width = 400 //window.innerWidth;
+canvas.height = 600 //window.innerHeight;
+canvas.width = canvas.height //window.innerWidth;
 
 const c = canvas.getContext('2d')
+// c.scale(1.5, 1.5) // zoom in canvas draws 
+// Ideia, para ocupar o máximo da tela dar scale a partir de um fator do window.innerHeight
+// igual ao funcionamento do colonist.io
 
 let mouseDown = false
 let holdingCard = null
@@ -22,8 +28,8 @@ const VALUES = [  "A",  "2",  "3",  "4",  "5",  "6",  "7",  "8",  "9",  "10",  "
 
 class Card {
     
-    static w = 29
-    static h = 40
+    static w = canvasWidthPct(7)   // canvas = 600 => 42px, original: 29px
+    static h = canvasHeightPct(10) // canvas = 600 => 60px, original: 40px
 
     constructor(value, suit, flipped = false, x = 0, y = 0, orientation = 'down') {
         this.suit = suit
@@ -64,8 +70,7 @@ class Card {
     }
 
     draw() {
-        
-        let b = 3
+        let b = Card.h*0.07 // orig: 3px
         // Save the current context state
         c.save();
     
@@ -93,6 +98,7 @@ class Card {
             c.fillRect(-Card.w / 2 + margin, - Card.h / 2 + margin, Card.w - 2*margin, Card.h - 2*margin)
 
             if (this.value == "joker"){ 
+                // *** mudar joker para JOK vertical na esquerda
                 // Rotaciona o texto
                 c.rotate(50*Math.PI / 180) 
                 c.fillStyle = this.color
@@ -106,13 +112,29 @@ class Card {
             } else {
 
                 c.fillStyle = this.color
-                c.font = "20px arial"
-                c.textAlign = 'center';
-                c.textBaseline = 'middle';
-                c.fillText(this.value, 0, -0.21*Card.h)
                 
-                c.font = "26px arial"
-                c.fillText(this.suit, 0, 0.21*Card.h)
+                c.font = canvasHeightPct(4.33).toString() + "px Oswald" // 26px para canvas=600
+                // c.textAlign = 'center';
+                // c.textBaseline = 'middle';
+                if (this.value == "J") {c.fillText(this.value, -0.35*Card.w, -0.07*Card.h)}
+                else if (this.value == "Q") {c.fillText(this.value, -0.45*Card.w, -0.07*Card.h)}
+                else if (this.value == "10") {
+                    c.font = canvasHeightPct(2.67).toString() + "px Oswald" // 16px para canvas=600
+                    c.fillText("1", -0.35*Card.w, -0.22*Card.h);
+                    c.fillText("0", -0.37*Card.w, 0.07*Card.h);
+                }
+                else {c.fillText(this.value, -0.43*Card.w, -0.07*Card.h)}
+                
+                // desenha o naipe pequeno
+                c.font = canvasHeightPct(2.33).toString() + "px Noto Sans JP" // 14px para canvas=600
+                if (this.value == "10") {c.fillText(this.suit, -0.44*Card.w, 0.34*Card.h)}
+                else {c.fillText(this.suit, -0.44*Card.w, 0.2*Card.h)}
+
+                // desenha 2 naipes grandes
+                // c.font = canvasHeightPct(3.7).toString() + "px Noto Sans JP"
+                // c.fillText(this.suit, -0.1*Card.w, 0.3*Card.h)
+                // c.fillText(this.suit, -0.1*Card.w, -0.1*Card.h)
+
 
             }
         }
@@ -206,7 +228,7 @@ class Stack {
     
     update() {
         if (this.numberOfCards() > 0) {
-            this.cards.forEach(card => {card.update();})
+            this.cards.forEach(card => {card.update()})
         }
     }
 }
@@ -221,7 +243,7 @@ class Deck extends Stack{
     constructor(cards = freshDeck(), x = 0, y = 0) {
         super(cards, x, y, false, 'down', false)
         this.cards.forEach(card => {card.x = this.x; card.y = this.y;})
-        this.shuffle()
+        // this.shuffle()
     }
 
     insideDeck(x, y){
@@ -329,6 +351,8 @@ class Discards extends Stack{
 
 
 class Hand extends Stack{
+    static defaultSpacing = 0.4*Card.w
+
     constructor(cards = [], xCenter = 0, yCorner = 0, flipped = false, movable = false, orientation = 'down', spacing = Card.w + 2) {
         super(cards, xCenter, yCorner, flipped, orientation, movable)
         this.spacing = spacing
@@ -365,23 +389,35 @@ class Hand extends Stack{
     }
 
     update(){
-        // Ordena vetor das cartas pela posição em x
-        this.cards.sort(function(card1, card2){
-            return card1.x - card2.x;
-        });
 
         let n = this.cards.length
         let xi = this.x - (this.spacing)*n/2 //- Card.w/2
         let yi = this.y - (this.spacing)*n/2 - Card.w/2
 
         if (this.orientation == 'up' || this.orientation == 'down'){
+            // Ordena vetor das cartas pela posição em x
+            this.cards.sort(function(card1, card2){
+                return card1.x - card2.x;
+            });
+
             for (let i = 0; i < n; i++){
                 this.cards[i].newTargetPos(xi + (this.spacing)*i, this.y)
             }
+            
+            // Reverte para desenhar as cartas da esquerda para direita
+            if (this.orientation == 'up') { this.cards.reverse() }
         } else {
+            // Ordena vetor das cartas pela posição em y
+            this.cards.sort(function(card1, card2){
+                return card1.y - card2.y;
+            });
+            
             for (let i = 0; i < n; i++){
                 this.cards[i].newTargetPos(this.x, yi + (this.spacing)*i)
             }
+
+            // Reverte para desenhar as cartas da esquerda para direita
+            if (this.orientation == 'right') { this.cards.reverse() }
         }
 
         super.update()
@@ -454,7 +490,7 @@ class Bot {
         this.x = x
         this.y = y
         this.orientation = orientation
-        this.hand = new Hand(cards, this.x, this.y, false, false, this.orientation, 10)
+        this.hand = new Hand(cards, this.x, this.y, true, false, this.orientation, Hand.defaultSpacing)
     }
 
     update(){
@@ -502,7 +538,7 @@ class Round{// Classe static pois não é necessário estanciá-la
         Round.table = new Table(200, 200)
         Round.table.addCombination(Round.deck.buy(3))
 
-        Round.player = new Player(Round.deck.buy(9), 200, 400 - (Card.h + 10))
+        Round.player = new Player(Round.deck.buy(9), canvasWidthPct(50), 400 - (Card.h + 10))
         const bot1 = new Bot(Round.deck.buy(9), 200, 10, 'up')
         const bot2 = new Bot(Round.deck.buy(9), 10, 200, 'left')
         const bot3 = new Bot(Round.deck.buy(9), 400 - (Card.w + 10), 200, 'right')
@@ -572,6 +608,14 @@ class Round{// Classe static pois não é necessário estanciá-la
 
 //----------------------------AUX FUNCTIONS--------------------------
   
+function canvasHeightPct(pct){
+    return Math.round(canvas.height*pct/100)
+}
+
+function canvasWidthPct(pct){
+    return Math.round(canvas.width*pct/100)
+}
+
 function freshDeck() {
     // Cria 2 listas com objetos únicos
     let d1 = SUITS.flatMap(suit => {
@@ -660,7 +704,6 @@ function animate(){ // default FPS = 60
     }
 
     Round.htmlDisplayAttributes()
-
 }
 
 Round.init()
@@ -777,7 +820,7 @@ addEventListener('mousemove', (event) => {
         if (bot.hand.insideArea(mouseX, mouseY)){
             bot.hand.spacing = Card.w + 2
         } else {
-            bot.hand.spacing = 10
+            bot.hand.spacing = Hand.defaultSpacing
         }
     }
 })
