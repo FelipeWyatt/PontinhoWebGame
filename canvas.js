@@ -226,7 +226,7 @@ class Deck extends Stack{
     constructor(cards = freshDeck(), x = 0, y = 0) {
         super(cards, x, y, false, 'down', false)
         this.cards.forEach(card => {card.newPos(this.x, this.y)})
-        this.shuffle()
+        // this.shuffle()
     }
 
     insideArea(x, y){
@@ -331,9 +331,10 @@ class Discards extends Stack{
 class Hand extends Stack{
     static defaultSpacing = 0.4*Card.w
 
-    constructor(cards = [], x = 0, y = 0, flipped = false, movable = false, orientation = 'down', spacing = Hand.defaultSpacing) {
+    constructor(cards = [], x = 0, y = 0, flipped = false, movable = false, orientation = 'down', spacing = Hand.defaultSpacing, sorted = false) {
         super(cards, x, y, flipped, orientation, movable)
         this.spacing = spacing
+        this.sorted = sorted
     }
     
     chooseRandomCard(){
@@ -373,10 +374,12 @@ class Hand extends Stack{
         let yi = this.y - (this.spacing)*(n - 1)/2
 
         if (this.orientation == 'up' || this.orientation == 'down'){
-            // Ordena vetor das cartas pela posição em x
-            this.cards.sort(function(card1, card2){
-                return card1.x - card2.x;
-            });
+            if (!this.sorted){
+                // Ordena vetor das cartas pela posição em x
+                this.cards.sort(function(card1, card2){
+                    return card1.x - card2.x;
+                });
+            }
 
             for (let i = 0; i < n; i++){
                 this.cards[i].newTargetPos(xi + (this.spacing)*i, this.y)
@@ -385,10 +388,12 @@ class Hand extends Stack{
             // Reverte para desenhar as cartas da esquerda para direita
             if (this.orientation == 'up') { this.cards.reverse() }
         } else {
-            // Ordena vetor das cartas pela posição em y
-            this.cards.sort(function(card1, card2){
-                return card1.y - card2.y;
-            });
+            if(!this.sorted){
+                // Ordena vetor das cartas pela posição em y
+                this.cards.sort(function(card1, card2){
+                    return card1.y - card2.y;
+                });
+            }
             
             for (let i = 0; i < n; i++){
                 this.cards[i].newTargetPos(this.x, yi + (this.spacing)*i)
@@ -404,7 +409,7 @@ class Hand extends Stack{
 
 class Combination extends Hand {
     constructor(cards = [], xCenter = 0, yCenter = 0){
-        super(cards, xCenter, yCenter, true, false, 'down', Hand.defaultSpacing)
+        super(cards, xCenter, yCenter, true, false, 'down', Hand.defaultSpacing, true)
     }
 
     calculateWidth(){
@@ -427,18 +432,168 @@ class Table {
         this.highlight = false
     }
 
-    static checkCombination(cards){
-        // *** completar check
-        // realiza os checks se combinação é possivel
-        if (cards.length < 3){
+    static checkCombination(cards, ending = false){
+        // Checa se é um jogo possível
+        const n = cards.length
+        if (n < 3){
             return false
         }
-        return true
+
+        let countValues = {}
+        let countSuits = {}
+        for (let value of VALUES){
+            countValues[value] = 0
+        }
+        for (let suit of SUITS){
+            countSuits[suit] = 0
+        }
+        for (let card of cards){
+            countValues[card.value]++
+            if (card.value != "joker"){
+                // Joker cards dont have a suit
+                countSuits[card.suit]++
+            }
+        }
+
+        // Check if it is supposed to be a sequence or trio
+        let type = null
+        let countDifferentSuits = 0
+        let countDifferentValues = 0
+        for (let suit of SUITS){
+            if (countSuits[suit] > 0){
+                countDifferentSuits++
+            } 
+        }
+        for (let value of VALUES){
+            if (countValues[value] > 0 && value != "joker"){
+                countDifferentValues++
+            } 
+        }
+
+
+        if (countDifferentSuits == 1){
+            type = 'seq'
+        } else if ((countDifferentSuits == 3 || countDifferentSuits == 4) && countDifferentValues == 1){
+            type = 'trio'
+        } else {
+            return false
+        } 
+
+
+        // check if the sequence is valid
+        if (type == 'seq'){
+            for (let value of VALUES){
+                if (countValues[value] > 1 && value != "joker" && value != "A"){
+                    // if has duplicates
+                    return false
+                } 
+            }
+
+            cards.sort(function(card1, card2){
+                return VALUES.indexOf(card1.value) - VALUES.indexOf(card2.value);
+            });
+    
+            // check descontinuitys
+            let descontinuitys = 0
+            let nJokers = countValues["joker"]
+            let jokers = []
+            if (nJokers > 0){
+                jokers = cards.slice(-nJokers)
+                cards = cards.slice(0, -nJokers) // remove the jokers
+            }
+            if (countValues["A"] == 2) {
+                cards.push(cards.shift()) // joga um dos áses no final
+            }
+
+            for (let i = 1; i < cards.length; i++){
+                if (i == cards.length - 1 && cards[i].value == "A") {
+                    // Se tem um ás na última posição, considera que é sucessor do rei
+                    descontinuitys += 13 - 1 - VALUES.indexOf(cards[i - 1].value)
+                } else {
+                    descontinuitys += VALUES.indexOf(cards[i].value) - 1 - VALUES.indexOf(cards[i-1].value)
+                }
+            }
+
+            console.log("descontinuitys ", descontinuitys)
+
+            if (descontinuitys != nJokers){
+                if (countValues["A"] == 1){
+                    // Joga o ás para o final e checa de novo
+                    cards.push(cards.shift())
+                    console.log("tentando mover o as: ", cards[2])
+                    descontinuitys = 0
+                    for (let i = 1; i < cards.length; i++){
+                        if (i == cards.length - 1 && cards[i].value == "A") {
+                            // Se tem um ás na última posição, considera que é sucessor do rei
+                            descontinuitys += 13 - 1 - VALUES.indexOf(cards[i - 1].value)
+                        } else {
+                            descontinuitys += VALUES.indexOf(cards[i].value) - 1 - VALUES.indexOf(cards[i-1].value)
+                        }
+                    }
+
+                    if (descontinuitys != nJokers){
+                        return false
+                    }
+                } else {
+                    return false
+                }
+            }
+
+            // Se chegou até aqui está correta, insere os joker nos lugares necessários
+            if (nJokers > 0){
+                let descontinuitySize = {}
+                descontinuitys = 0
+                for (let i = 1; i < cards.length; i++){
+                    descontinuitySize[i + descontinuitys] = VALUES.indexOf(cards[i].value) - 1 - VALUES.indexOf(cards[i-1].value)
+                    descontinuitys += VALUES.indexOf(cards[i].value) - 1 - VALUES.indexOf(cards[i-1].value)
+                }
+                console.log("descontinuitySize ", descontinuitySize)
+                for (let i in descontinuitySize){
+                    for (let j = 0; j < descontinuitySize[i]; j++){
+                        // add the number of necessary jokers to array at necessary index
+                        cards.splice(parseInt(i) + j, 0, jokers.pop())
+                        console.log('added at ', parseInt(i) + j)
+                    }
+                }
+                for (let i = 0; i < cards.length; i++){
+                    console.log(cards[i])
+                }
+                console.log(jokers)
+            }
+            
+        } else if (type == 'trio'){
+            if (countValues["joker"] > 0 ){
+                return false
+            }
+
+            if (countDifferentSuits == 4){
+                let maxCountSuits = 0
+                for (let suit of SUITS){
+                    if (countSuits[suit] > maxCountSuits) {
+                        maxCountSuits = countSuits[suit]
+                    }
+                }
+                if (maxCountSuits != 2){
+                    // if four suits, one suit must have the 2 cards
+                    return false
+                }
+            }
+
+            // Se chegou até aqui está correto
+            cards.sort(function(card1, card2){
+                return SUITS.indexOf(card1.suit) - SUITS.indexOf(card2.suit);
+            });
+        } 
+
+
+        return cards
     }
 
     addCombination(cards){
-        if (Table.checkCombination(cards)){
-            this.combs.push(new Combination(cards, this.x, this.y))
+        let response = Table.checkCombination(cards)
+        if (response != false){
+            // then response is the cards array sorted
+            this.combs.push(new Combination(response, this.x, this.y))
             return true
         }
         return false
@@ -600,18 +755,15 @@ class Round{// Classe static pois não é necessário estanciá-la
 
     static init(){
         // Begin round
-        Round.deck = new Deck(freshDeck(), canvasWidthPct(33.33), canvasHeightPct(35))
+        let d = freshDeck()
+        d.push(new Card("K", SUITS[0]), new Card("K", SUITS[1]), new Card("K", SUITS[2]), new Card("K", SUITS[3]), new Card("3", SUITS[0]))
+        Round.deck = new Deck(d, canvasWidthPct(33.33), canvasHeightPct(35))
         Round.discardPile = new Discards(canvasWidthPct(66.67),  canvasHeightPct(35))
         Round.table = new Table(canvasWidthPct(50), canvasHeightPct(66.67), canvasWidthPct(66.67), canvasHeightPct(36.67))
         
         Round.cancelButton = new Button(canvasWidthPct(8), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Cancel', false)
         Round.dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Drop', false)
         
-        Round.table.addCombination(Round.deck.buy(3))
-        Round.table.addCombination(Round.deck.buy(4))
-        Round.table.addCombination(Round.deck.buy(3))
-        Round.table.addCombination(Round.deck.buy(13))
-
         Round.player = new Player(Round.deck.buy(9), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
         const bot1 = new Bot(Round.deck.buy(9), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
         const bot2 = new Bot(Round.deck.buy(9), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
