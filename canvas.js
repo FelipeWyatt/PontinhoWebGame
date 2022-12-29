@@ -19,10 +19,12 @@ const c = canvas.getContext('2d')
 
 let mouseDown = false
 let holdingCard = null
+let dropSelection = []
 let mouseX = 0
 let mouseY = 0
 
 //-----------------------------CLASSES------------------------------------
+const velocity = 0.1 // card movement velocity
 const SUITS = ["♠", "♣", "♥", "♦"]
 const VALUES = [  "A",  "2",  "3",  "4",  "5",  "6",  "7",  "8",  "9",  "10",  "J",  "Q",  "K", "joker"]
 
@@ -60,87 +62,69 @@ class Card {
         this.yTarget = y
     }
 
-    insideCard(x, y){
-        if (x > this.x && x < this.x + Card.w){
-            if (y > this.y && y < this.y + Card.h){
-                return true
-            }
-        }
-        return false
+    insideArea(x, y){
+        const cond1 = Math.abs(this.x - x) <= Card.w/2
+        const cond2 = Math.abs(this.y - y) <= Card.h/2
+        return cond1 && cond2
     }
 
     draw() {
-        let b = Card.h*0.07 // orig: 3px
-        // Save the current context state
-        c.save();
+        c.save() // Save the current context state
     
-        // Translate the context to the center of the card
-        c.translate(this.x + Card.w / 2, this.y + Card.h / 2);
-    
-        // Rotate the context by 90 degrees if needed
-        if (this.orientation == 'left') { c.rotate(Math.PI / 2); }
-        else if (this.orientation == 'up') { c.rotate(Math.PI); }
-        else if (this.orientation == 'right') { c.rotate(- Math.PI / 2); }
+        c.translate(this.x, this.y); // to draw by the top left corner: c.translate(this.x + Card.w/2, this.y + Card.h/2);
 
-        // Margin one pixel wide
+        // Rotate the context by 90 degrees if needed
+        if (this.orientation == 'up') {
+            c.rotate(Math.PI)
+        } else if (this.orientation == 'left') { 
+            c.rotate(Math.PI / 2)
+        } else if (this.orientation == 'right') { 
+            c.rotate(- Math.PI / 2)
+        }
+
+        // black Margin one pixel wide
         let margin = 1  
+        let b = Card.h*0.07 // white margin back of the card
         c.fillStyle = "black"
-        c.fillRect(-Card.w / 2, - Card.h / 2, Card.w, Card.h)
+        c.fillRect(-Card.w / 2, -Card.h / 2, Card.w, Card.h)
+        c.fillStyle = "white"
+        c.fillRect(-Card.w / 2 + margin, - Card.h / 2 + margin, Card.w - 2*margin, Card.h - 2*margin)
+        
 
         if (!this.flipped){
-            // Draw the card at the origin (since the context has been translated)    
-            c.fillStyle = "white"
-            c.fillRect(-Card.w / 2 + margin, - Card.h / 2 + margin, Card.w - 2*margin, Card.h - 2*margin)
             c.fillStyle = "#d12d36"
             c.fillRect(-Card.w / 2 + b, - Card.h / 2 + b, Card.w - 2*b, Card.h - 2*b)
         } else {
-            c.fillStyle = "white"
-            c.fillRect(-Card.w / 2 + margin, - Card.h / 2 + margin, Card.w - 2*margin, Card.h - 2*margin)
-
+            c.fillStyle = this.color
+            
             if (this.value == "joker"){ 
-                // *** mudar joker para JOK vertical na esquerda
-                // Rotaciona o texto
-                c.rotate(50*Math.PI / 180) 
-                c.fillStyle = this.color
-                c.font = "13px arial"
-                c.textAlign = 'center';
-                c.textBaseline = 'middle';
-                c.fillText("Joker", 0, 0)
-
-                // Desrotaciona o texto
-                c.rotate(-50*Math.PI / 180) 
+                c.font = canvasHeightPct(3.33).toString() + "px Oswald" // 20px para canvas=600
+                c.fillText("J", -0.35*Card.w, -0.18*Card.h)
+                c.fillText("O", -0.4*Card.w, 0.13*Card.h)
+                c.fillText("K", -0.38*Card.w, 0.45*Card.h)
             } else {
-
-                c.fillStyle = this.color
-                
                 c.font = canvasHeightPct(4.33).toString() + "px Oswald" // 26px para canvas=600
-                // c.textAlign = 'center';
-                // c.textBaseline = 'middle';
+                
                 if (this.value == "J") {c.fillText(this.value, -0.35*Card.w, -0.07*Card.h)}
                 else if (this.value == "Q") {c.fillText(this.value, -0.45*Card.w, -0.07*Card.h)}
                 else if (this.value == "10") {
                     c.font = canvasHeightPct(2.67).toString() + "px Oswald" // 16px para canvas=600
                     c.fillText("1", -0.35*Card.w, -0.22*Card.h);
                     c.fillText("0", -0.37*Card.w, 0.07*Card.h);
-                }
-                else {c.fillText(this.value, -0.43*Card.w, -0.07*Card.h)}
+                } else {c.fillText(this.value, -0.43*Card.w, -0.07*Card.h)}
                 
                 // desenha o naipe pequeno
                 c.font = canvasHeightPct(2.33).toString() + "px Noto Sans JP" // 14px para canvas=600
                 if (this.value == "10") {c.fillText(this.suit, -0.44*Card.w, 0.34*Card.h)}
                 else {c.fillText(this.suit, -0.44*Card.w, 0.2*Card.h)}
 
-                // desenha 2 naipes grandes
-                // c.font = canvasHeightPct(3.7).toString() + "px Noto Sans JP"
-                // c.fillText(this.suit, -0.1*Card.w, 0.3*Card.h)
-                // c.fillText(this.suit, -0.1*Card.w, -0.1*Card.h)
-
-
+                // desenha o naipe grande
+                c.font = canvasHeightPct(3).toString() + "px Noto Sans JP"
+                c.fillText(this.suit, 0.005*Card.w, 0.4*Card.h)
+                
             }
         }
         
-        
-
         if (this.highlight){
             c.fillStyle = 'rgba(255, 255, 0, 0.3)'
             c.fillRect(-Card.w / 2, - Card.h / 2, Card.w, Card.h)
@@ -156,8 +140,7 @@ class Card {
             this.newPos(mouseX - this.grab.dx , mouseY - this.grab.dy)
         }
 
-        // Checa se está dentro da coordenada target, com uma tolerancia
-        let velocity = 0.1
+        // Checa se está dentro da coordenada target, com uma tolerancia de 1 pixel
         if (Math.abs(this.x - this.xTarget) >= 1){
             this.x += velocity*(this.xTarget - this.x)
         } else {
@@ -237,22 +220,19 @@ class Stack {
 
 class Deck extends Stack{
     
-    static hSpacing = 8
-    static vSpacing = 2
+    static hSpacing = canvasWidthPct(2)
+    static vSpacing = canvasHeightPct(0.5)
 
     constructor(cards = freshDeck(), x = 0, y = 0) {
         super(cards, x, y, false, 'down', false)
-        this.cards.forEach(card => {card.x = this.x; card.y = this.y;})
-        // this.shuffle()
+        this.cards.forEach(card => {card.newPos(this.x, this.y)})
+        this.shuffle()
     }
 
-    insideDeck(x, y){
-        if (x > this.x && x < this.x + Card.w + 2*Deck.hSpacing){
-            if (y > this.y && y < this.y + Card.h + 2*Deck.vSpacing){
-                return true
-            }
-        }
-        return false
+    insideArea(x, y){
+        const cond1 = Math.abs(this.x - x) <= Card.w/2 + Deck.hSpacing
+        const cond2 = Math.abs(this.y - y) <= Card.h/2 + Deck.vSpacing
+        return cond1 && cond2
     }
 
   
@@ -268,29 +248,27 @@ class Deck extends Stack{
     }
 
 
-    draw() {
-        let n = this.numberOfCards()
-        if (n > 3) {n = 3}
-        else if (n <= 0) {return null}
-
-        for (let i = 0; i < n; i++){
-            this.cards[i].newPos(this.x + Deck.hSpacing*i, this.y + Deck.vSpacing*i)
-            this.cards[i].draw()
-        }
-    }
-
     update(){
-        this.draw()
+        let n = this.numberOfCards()
+        if (n > 0) {
+            let i = n - 4 // Só desenha as 4 últimas cartas do array
+            if (i < 0) { i = 0 }
+            while (i < n){
+                this.cards[i].newPos(this.x + Deck.hSpacing*(i - n + 2), this.y + Deck.vSpacing*(i - n + 2))
+                this.cards[i].update() // Only draw the last cards
+                i++
+            }
+        }
     }
 }
 
 class Discards extends Stack{
-    static scatterRadius = 60
-    static cornerRadius = 10
+    static scatterRadius = canvasHeightPct(13)
+    static cornerRadius = 2
 
     constructor(x = 0, y = 0) {
         super([], x, y, true, 'down', false)
-        // Can only buy the top card
+        // Can only buy the last card
         this.buyable = false
         this.highlight = false
     }
@@ -312,7 +290,7 @@ class Discards extends Stack{
   
     add(card) {
         // Add card to the end of the array
-        let loc = randomPointInSquare(this.x, this.y, Discards.scatterRadius)
+        const loc = randomPointInSquare(this.x, this.y, Discards.scatterRadius)
         card.newTargetPos(loc.x, loc.y)
         super.add(card)
         this.buyable = true
@@ -353,8 +331,8 @@ class Discards extends Stack{
 class Hand extends Stack{
     static defaultSpacing = 0.4*Card.w
 
-    constructor(cards = [], xCenter = 0, yCorner = 0, flipped = false, movable = false, orientation = 'down', spacing = Card.w + 2) {
-        super(cards, xCenter, yCorner, flipped, orientation, movable)
+    constructor(cards = [], x = 0, y = 0, flipped = false, movable = false, orientation = 'down', spacing = Hand.defaultSpacing) {
+        super(cards, x, y, flipped, orientation, movable)
         this.spacing = spacing
     }
     
@@ -382,17 +360,17 @@ class Hand extends Stack{
         let n = this.cards.length
         let comp = (this.spacing)*(n-1) + Card.w
         if (this.orientation == 'up' || this.orientation == 'down'){
-            return (Math.abs(x - this.x) <= comp/2 && y - this.y <= Card.h && y - this.y >= 0)
+            return (Math.abs(this.x - x) <= comp/2 && Math.abs(y - this.y) <= Card.h/2)
         } else {
-            return (Math.abs(y - this.y) <= comp/2 && x - this.x <= Card.h && x - this.x >= 0)
+            return (Math.abs(this.y - y) <= comp/2 && Math.abs(x - this.x) <= Card.w/2)
         }
     }
 
     update(){
 
         let n = this.cards.length
-        let xi = this.x - (this.spacing)*n/2 //- Card.w/2
-        let yi = this.y - (this.spacing)*n/2 - Card.w/2
+        let xi = this.x - (this.spacing)*(n - 1)/2
+        let yi = this.y - (this.spacing)*(n - 1)/2
 
         if (this.orientation == 'up' || this.orientation == 'down'){
             // Ordena vetor das cartas pela posição em x
@@ -426,17 +404,18 @@ class Hand extends Stack{
 
 class Combination extends Hand {
     constructor(cards = [], xCenter = 0, yCenter = 0){
-        super(cards, xCenter, yCenter, true, false, 'down', 10)
+        super(cards, xCenter, yCenter, true, false, 'down', Hand.defaultSpacing)
     }
 
     calculateWidth(){
-        return (this.spacing)*(this.cards.length-1) + Card.w
+        return (this.spacing)*(this.numberOfCards() - 1) + Card.w
     }
 }
 
 class Table {
+    static cornerRadius = 2
 
-    constructor(xCenter, yCenter, w = 100, h = 50, internalSpacing = 2){
+    constructor(xCenter, yCenter, w, h, internalSpacing = canvasWidthPct(1.67)){
         this.combs = []
         this.x = xCenter
         this.y = yCenter
@@ -445,9 +424,11 @@ class Table {
         this.internalSpacing = internalSpacing
         this.flipped = true
         this.orientation = 'down'
+        this.highlight = false
     }
 
     static checkCombination(cards){
+        // *** completar check
         // realiza os checks se combinação é possivel
         if (cards.length < 3){
             return false
@@ -458,29 +439,113 @@ class Table {
     addCombination(cards){
         if (Table.checkCombination(cards)){
             this.combs.push(new Combination(cards, this.x, this.y))
+            return true
         }
+        return false
+    }
+
+    insideArea(x, y){
+        return Math.abs(this.x - x) <= this.w/2 && Math.abs(this.y - y) <= this.h/2
     }
 
     update(){
-        // Define os lugares das combinations
-        let xCorner = this.x - this.w/2
-        let yCorner = this.y - this.h/2
-        let xComb = xCorner + this.internalSpacing // x dimension of corner of comb
-        let yComb = yCorner + Card.h + this.internalSpacing // y dimension of corner of comb
-        for (let comb of this.combs){
-            comb.x = xComb + comb.calculateWidth()/2
-            comb.y = yComb
-
-            xComb += comb.calculateWidth() + this.internalSpacing
-
-            if (xComb + comb.calculateWidth() > this.x + this.w/2){
-                // Se sair da largura da table, "adiciona mais uma linha"
-                yComb += Card.h + this.internalSpacing
-                xComb = xCorner + this.internalSpacing
+        if (this.combs.length > 0){
+            // Define os lugares das combinations
+            let xCorner = this.x - this.w/2
+            let yCorner = this.y - this.h/2
+            let xComb = xCorner + this.internalSpacing// x dimension of corner of comb
+            let yComb = yCorner + this.internalSpacing + Card.h/2 // y dimension of corner of comb
+            for (let comb of this.combs){
+                let comp = comb.calculateWidth()
+    
+                if (xComb + comp > this.x + this.w/2){
+                    // Se sair da largura da Table, "adiciona mais uma linha"
+                    yComb += Card.h + this.internalSpacing
+                    xComb = xCorner + this.internalSpacing
+                }
+    
+                comb.x = xComb + comp/2
+                comb.y = yComb
+    
+                xComb += comp + this.internalSpacing
+    
+                comb.update()
             }
-
-            comb.update()
         }
+
+        if (this.highlight){
+            c.save();
+            c.fillStyle = 'rgba(255, 255, 0, 0.3)';
+
+            c.beginPath();
+            c.moveTo(this.x - this.w/2 + Table.cornerRadius, this.y - this.h/2);
+            c.arcTo(this.x + this.w/2, this.y - this.h/2, this.x + this.w/2, this.y + this.h/2, Table.cornerRadius);
+            c.arcTo(this.x + this.w/2, this.y + this.h/2, this.x - this.w/2, this.y + this.h/2, Table.cornerRadius);
+            c.arcTo(this.x - this.w/2, this.y + this.h/2, this.x - this.w/2, this.y - this.h/2, Table.cornerRadius);
+            c.arcTo(this.x - this.w/2, this.y - this.h/2, this.x + this.w/2, this.y - this.h/2, Table.cornerRadius);
+            
+            c.fill();
+            c.restore();
+        }
+    }
+}
+
+class Button {
+    static cornerRadius = 5
+
+    constructor(x, y, w, h, text, visible = false){
+        this.x = x
+        this.y = y
+        this.w = w
+        this.h = h
+        this.text = text
+        this.visible = visible
+        this.highlight = false
+    }
+
+    insideArea(x, y){
+        return Math.abs(this.x - x) <= this.w/2 && Math.abs(this.y - y) <= this.h/2
+    }
+
+    draw(){
+        c.save();
+        c.fillStyle = 'rgba(255, 255, 255, 0.8)'
+
+        c.beginPath();
+        c.moveTo(this.x - this.w/2 + Button.cornerRadius, this.y - this.h/2);
+        c.arcTo(this.x + this.w/2, this.y - this.h/2, this.x + this.w/2, this.y + this.h/2, Button.cornerRadius);
+        c.arcTo(this.x + this.w/2, this.y + this.h/2, this.x - this.w/2, this.y + this.h/2, Button.cornerRadius);
+        c.arcTo(this.x - this.w/2, this.y + this.h/2, this.x - this.w/2, this.y - this.h/2, Button.cornerRadius);
+        c.arcTo(this.x - this.w/2, this.y - this.h/2, this.x + this.w/2, this.y - this.h/2, Button.cornerRadius);
+        c.fill();
+
+        c.textAlign = 'center'
+        c.textBaseline = 'middle'
+        c.fillStyle = 'black'
+        c.font = (0.6*this.h).toString() + "px arial" // 16px para canvas=600
+        c.fillText(this.text, this.x, this.y)
+                
+        if (this.highlight){
+            c.fillStyle = 'rgba(255, 255, 0, 0.5)'
+
+            c.beginPath();
+            c.moveTo(this.x - this.w/2 + Button.cornerRadius, this.y - this.h/2);
+            c.arcTo(this.x + this.w/2, this.y - this.h/2, this.x + this.w/2, this.y + this.h/2, Button.cornerRadius);
+            c.arcTo(this.x + this.w/2, this.y + this.h/2, this.x - this.w/2, this.y + this.h/2, Button.cornerRadius);
+            c.arcTo(this.x - this.w/2, this.y + this.h/2, this.x - this.w/2, this.y - this.h/2, Button.cornerRadius);
+            c.arcTo(this.x - this.w/2, this.y - this.h/2, this.x + this.w/2, this.y - this.h/2, Button.cornerRadius);
+            c.fill();
+        }
+
+        c.restore();
+
+    }
+
+    update(){
+        if (this.visible){
+            this.draw()
+        }
+        
     }
 }
 
@@ -490,7 +555,7 @@ class Bot {
         this.x = x
         this.y = y
         this.orientation = orientation
-        this.hand = new Hand(cards, this.x, this.y, true, false, this.orientation, Hand.defaultSpacing)
+        this.hand = new Hand(cards, this.x, this.y, false, false, this.orientation, Hand.defaultSpacing)
     }
 
     update(){
@@ -503,7 +568,7 @@ class Player {
         this.x = x
         this.y = y
         this.orientation = orientation
-        this.hand = new Hand(cards, this.x, this.y, true, true, this.orientation)
+        this.hand = new Hand(cards, this.x, this.y, true, true, this.orientation, Card.w + 2)
     }
 
     update(){
@@ -515,12 +580,14 @@ class Round{// Classe static pois não é necessário estanciá-la
     static deck
     static discardPile
     static table
+    static dropButton
+    static cancelButton
     static player
     static bots
     static elements
     static order
     static turn
-    static phase // buy, drop and discard
+    static phase // buy -> think <-> drop -> discard
 
     static htmlDisplayAttributes() {
         // update the cells in the table with the values of the Round class attributes
@@ -533,17 +600,25 @@ class Round{// Classe static pois não é necessário estanciá-la
 
     static init(){
         // Begin round
-        Round.deck = new Deck(freshDeck(), 120, 160)
-        Round.discardPile = new Discards(240,  160 + Card.h/2)
-        Round.table = new Table(200, 200)
+        Round.deck = new Deck(freshDeck(), canvasWidthPct(33.33), canvasHeightPct(35))
+        Round.discardPile = new Discards(canvasWidthPct(66.67),  canvasHeightPct(35))
+        Round.table = new Table(canvasWidthPct(50), canvasHeightPct(66.67), canvasWidthPct(66.67), canvasHeightPct(36.67))
+        
+        Round.cancelButton = new Button(canvasWidthPct(8), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Cancel', false)
+        Round.dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Drop', false)
+        
         Round.table.addCombination(Round.deck.buy(3))
+        Round.table.addCombination(Round.deck.buy(4))
+        Round.table.addCombination(Round.deck.buy(3))
+        Round.table.addCombination(Round.deck.buy(13))
 
-        Round.player = new Player(Round.deck.buy(9), canvasWidthPct(50), 400 - (Card.h + 10))
-        const bot1 = new Bot(Round.deck.buy(9), 200, 10, 'up')
-        const bot2 = new Bot(Round.deck.buy(9), 10, 200, 'left')
-        const bot3 = new Bot(Round.deck.buy(9), 400 - (Card.w + 10), 200, 'right')
+        Round.player = new Player(Round.deck.buy(9), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
+        const bot1 = new Bot(Round.deck.buy(9), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
+        const bot2 = new Bot(Round.deck.buy(9), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
+        const bot3 = new Bot(Round.deck.buy(9), canvasWidthPct(97) - Card.h/2, canvasHeightPct(50), 'right')
         Round.bots = [bot1, bot2, bot3]
-        Round.elements = [Round.deck, Round.discardPile, Round.table, Round.player, bot1, bot2, bot3]
+        
+        Round.elements = [Round.deck, Round.discardPile, Round.table, Round.cancelButton, Round.dropButton, Round.player, bot1, bot2, bot3]
         console.log(Round.elements)
 
         Round.order = [Round.player, bot2, bot1, bot3] // sentido horário
@@ -560,13 +635,22 @@ class Round{// Classe static pois não é necessário estanciá-la
         } else {
             return false
         }
-        Round.phase = 'drop'
+        Round.phase = 'think'
         return true
     }
 
-    static turnDroppedCombination(){
-        
-
+    static turnDroppedCombination(cards){
+        if(Round.table.addCombination(cards)){
+            for (let card of cards) {
+                Round.turn.hand.remove(card)
+            }
+            console.log('combinacao adicionada okay')
+            return true
+        } else {
+            // ***Adicionar pop-up (?) de aviso
+            console.log('Combinacao invalida')
+            return false
+        }
     }
 
     static turnDiscardedCard(card){
@@ -647,47 +731,36 @@ function map(current, in_min, in_max, out_min, out_max) {
 
 function randomNumber(mean, maxDiff) {
     // Generate a random number between mean - maxDiff and mean + maxDiff
-    return mean - maxDiff + (Math.random() * (maxDiff * 2));
+    return mean - maxDiff + (Math.random() * (maxDiff * 2))
 }
 
 function randomPointInCircle(centerX, centerY, maxRadius) {
     // Generate a random radius between 0 and maxRadius
-    let radius = Math.random() * maxRadius;
+    let radius = Math.random() * maxRadius
   
     // Generate a random angle between 0 and 2*PI
-    let angle = Math.random() * 2 * Math.PI;
+    let angle = Math.random() * 2 * Math.PI
   
     // Calculate the x and y coordinates of the point on the circle at the given angle
-    let x = centerX + radius * Math.cos(angle);
-    let y = centerY + radius * Math.sin(angle);
+    let x = centerX + radius * Math.cos(angle)
+    let y = centerY + radius * Math.sin(angle)
 
     // Return the point as an object with x and y properties
-    return { x, y };
+    return { x, y }
 }
 
 function randomPointInSquare(centerX, centerY, halfSide) {
-    let maxX = centerX + halfSide - Card.w;
-    let maxY = centerY + halfSide - Card.h;
+    let max_dx = 2*halfSide - Card.w
+    let max_dy = 2*halfSide - Card.h
 
     // Generate random x and y coordinates within the allowable range
-    let x = Math.random() * (maxX - (centerX - halfSide)) + (centerX - halfSide);
-    let y = Math.random() * (maxY - (centerY - halfSide)) + (centerY - halfSide);
+    let x = Math.random() * max_dx + (centerX - (halfSide - Card.w/2))
+    let y = Math.random() * max_dy + (centerY - (halfSide - Card.h/2))
 
     // Return the point as an object with x and y properties
-    return { x, y };
+    return { x, y }
 }
   
-function randomPointInRoundedSquare(Card, centerX, centerY, halfSide, cornerRadius) {
-    // Calculate the maximum x and y coordinates for the top left corner of the card
-    let maxX = centerX + halfSide - Card.w + cornerRadius;
-    let maxY = centerY + halfSide - Card.h + cornerRadius;
-
-    // Generate random x and y coordinates within the allowable range
-    let x = Math.random() * (maxX - (centerX - halfSide + cornerRadius)) + (centerX - halfSide + cornerRadius);
-    let y = Math.random() * (maxY - (centerY - halfSide + cornerRadius)) + (centerY - halfSide + cornerRadius);
-
-    return { x, y };
-}
   
 //---------------------------------MAIN------------------------------
 
@@ -716,81 +789,124 @@ addEventListener('mousedown', (event) => {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
+    console.log(mouseX, mouseY)
+
+    // Finds which card was clicked in some groups: player.hand, discardPile.cards, Table.combs
+    let clickedCard = null
+
+    // Filter all cards if click was inside it
+    let possibleCards =  Round.player.hand.cards.filter(card => card.insideArea(x, y))
+    possibleCards = possibleCards.concat(Round.discardPile.cards.filter(card => card.insideArea(x, y)))
+    for (let comb of Round.table.combs) {
+        possibleCards = possibleCards.concat(comb.cards.filter(card => card.insideArea(x, y)))
+    }
+
+    if (possibleCards.length >= 1){
+        // Find the closest card (by x corner) to the click point
+        clickedCard = possibleCards[0]
+        let closest_dx = x - (clickedCard.x - Card.w/2)
+
+        for (let i = 1; i < possibleCards.length; i++) {
+            let card = possibleCards[i]
+            let dx = x - (card.x - Card.w/2)
+            if (dx < closest_dx){
+                clickedCard = card
+                closest_dx = dx
+            }
+        }
+    }
+
     // Round.discardPile.add(Round.deck.buy()) // test the discardPile
 
     // Check if click was to buy
     if (Round.turn == Round.player && Round.phase == 'buy'){
-        if (Round.deck.insideDeck(x, y)){
+        if (Round.deck.insideArea(x, y)){
             Round.turnBoughtCard('deck')
             return
-        } else if (Round.discardPile.buyable && Round.discardPile.lastCard().insideCard(x, y)){
+        } else if (Round.discardPile.buyable && Round.discardPile.lastCard().insideArea(x, y)){
             Round.turnBoughtCard('discardPile')
             return
         }
     }
 
-    // Selected discardPile
-    if (Round.turn == Round.player && Round.phase == 'drop' && Round.discardPile.highlight){
+    // Selected discardPile to discard
+    if (Round.turn == Round.player && Round.phase == 'think' && Round.discardPile.highlight){
         Round.phase = 'discard'
         Round.turn.hand.highlightCards()
         return
     }
 
-    if (Round.turn == Round.player && Round.phase == 'discard'){
-        let possibleCards =  Round.player.hand.cards.filter(card => card.insideCard(x, y))
-        let len = possibleCards.length
-
-        if (len >= 1){
-            // Find the closest card (by x dimension) to the click point
-            let clickedCard = possibleCards[0]
-            let closest_dx = x - clickedCard.x
-
-            for (let i = 1; i < len; i++) {
-                let card = possibleCards[i]
-                let dx = x - card.x
-                if (dx < closest_dx){
-                    clickedCard = card
-                    closest_dx = dx
-                }
-                
-            }
-
-            Round.turn.hand.downlightCards()
-            Round.turnDiscardedCard(clickedCard) // termina o turno
-        }
-      
+    // Selected Table to drop a combination
+    if (Round.turn == Round.player && Round.phase == 'think' && Round.table.highlight){
+        Round.phase = 'drop'
+        Round.turn.hand.highlightCards()
+        Round.cancelButton.visible = true
+        Round.dropButton.visible = true
         return
     }
 
 
-    if (Round.phase != 'discard'){
-        // Check if click was on movable card only if it's not player turn to drop
-        let possibleCards =  Round.player.hand.cards.filter(card => card.grab.movable && card.insideCard(x, y))
-        let len = possibleCards.length
+    // Selected dropButton to drop currently combination
+    if (Round.turn == Round.player && Round.phase == 'drop' && Round.dropButton.highlight){
+        const okay = Round.turnDroppedCombination(dropSelection)
+        dropSelection = []
+        if (okay) {
+            Round.turn.hand.downlightCards()
+            Round.cancelButton.visible = false
+            Round.dropButton.visible = false
+            Round.phase = 'think'
+        } else {
+            Round.turn.hand.highlightCards()
+        }
+        
+        return
+    }
 
-        if (len >= 1) {
-            // Find the closest card (by x dimension) to the click point
-            holdingCard = possibleCards[0]
-            let closest_dx = x - holdingCard.x
-            let closest_dy = y - holdingCard.y
+    // Selected cancelButton to cancel the drop
+    if (Round.turn == Round.player && Round.phase == 'drop' && Round.cancelButton.highlight){
+        dropSelection = []
+        Round.turn.hand.downlightCards()
+        Round.cancelButton.visible = false
+        Round.dropButton.visible = false
+        Round.phase = 'think'
+        return
+    }
 
-            for (let i = 1; i < len; i++) {
-                let card = possibleCards[i]
-                let dx = x - card.x
-                if (dx < closest_dx){
-                    holdingCard = card
-                    closest_dx = dx
-                    closest_dy = dy
-                }
-                
+    if (clickedCard != null){
+        // Selected a card to compose the drop combination
+        if (Round.turn == Round.player && Round.phase == 'drop' && clickedCard.highlight){
+            dropSelection.push(clickedCard)
+            clickedCard.highlight = false
+            return
+        }
+
+        // Unselected a card to compose the drop combination
+        if (Round.turn == Round.player && Round.phase == 'drop' && !clickedCard.highlight){
+            // Remove card from array
+            dropSelection.splice(dropSelection.indexOf(clickedCard), 1)
+            clickedCard.highlight = true
+            return
+        }
+        
+        // Selected a card to discard
+        if (Round.turn == Round.player && Round.phase == 'discard'){
+            Round.turn.hand.downlightCards()
+            Round.turnDiscardedCard(clickedCard) // termina o turno
+            return
+        }
+    
+        // Selected a card to move with mouse, cannot move card in drop or discard phases of player turn
+        if (Round.turn != Round.player || Round.phase == 'buy' || Round.phase == 'think'){
+            if (clickedCard.grab.movable){
+                holdingCard = clickedCard
+                holdingCard.grab.holding = true
+                holdingCard.grab.dx = x - holdingCard.x
+                holdingCard.grab.dy = y - holdingCard.y
+                return
             }
-            
-            holdingCard.grab.holding = true
-            holdingCard.grab.dx = closest_dx
-            holdingCard.grab.dy = closest_dy
-            
         }
     }
+
     
 })
 
@@ -800,9 +916,6 @@ addEventListener('mouseup', () => {
         holdingCard.grab.holding = false
         holdingCard = null
     }
-    
-    // reorganiza posicao das cartas
-    Round.player.update()
 })
 
 addEventListener('mousemove', (event) => {
@@ -813,14 +926,20 @@ addEventListener('mousemove', (event) => {
     mouseX = x
     mouseY = y
 
-    Round.discardPile.highlight = (Round.turn == Round.player && Round.phase == 'drop'
-                                   && holdingCard == null && Round.discardPile.insideArea(mouseX, mouseY));
-
-    for (let bot of Round.bots){
-        if (bot.hand.insideArea(mouseX, mouseY)){
-            bot.hand.spacing = Card.w + 2
-        } else {
-            bot.hand.spacing = Hand.defaultSpacing
-        }
-    }
+    const cond1 = Round.turn == Round.player && holdingCard == null
+    const cond2 = Round.phase == 'think'
+    const cond3 = Round.phase == 'drop'
+    
+    Round.discardPile.highlight = cond1 && cond2 && Round.discardPile.insideArea(mouseX, mouseY)
+    Round.table.highlight = cond1 && cond2 && Round.table.insideArea(mouseX, mouseY)
+    
+    Round.cancelButton.highlight = cond1 && cond3 && Round.cancelButton.insideArea(mouseX, mouseY)
+    Round.dropButton.highlight = cond1 && cond3 && Round.dropButton.insideArea(mouseX, mouseY)
+    
+    // // Spread cards when mouse is over
+    // if (Round.player.hand.insideArea(mouseX, mouseY)){
+    //     Round.player.hand.spacing = Card.w + 2
+    // } else {
+    //     Round.player.hand.spacing = Hand.defaultSpacing
+    // }
 })
