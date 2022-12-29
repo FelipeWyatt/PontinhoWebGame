@@ -226,7 +226,7 @@ class Deck extends Stack{
     constructor(cards = freshDeck(), x = 0, y = 0) {
         super(cards, x, y, false, 'down', false)
         this.cards.forEach(card => {card.newPos(this.x, this.y)})
-        // this.shuffle()
+        this.shuffle()
     }
 
     insideArea(x, y){
@@ -756,7 +756,7 @@ class Round{// Classe static pois não é necessário estanciá-la
     static init(){
         // Begin round
         let d = freshDeck()
-        d.push(new Card("K", SUITS[0]), new Card("K", SUITS[1]), new Card("K", SUITS[2]), new Card("K", SUITS[3]), new Card("3", SUITS[0]))
+        // d.push(new Card("K", SUITS[0]), new Card("K", SUITS[1]), new Card("K", SUITS[2]), new Card("K", SUITS[3]), new Card("3", SUITS[0]))
         Round.deck = new Deck(d, canvasWidthPct(33.33), canvasHeightPct(35))
         Round.discardPile = new Discards(canvasWidthPct(66.67),  canvasHeightPct(35))
         Round.table = new Table(canvasWidthPct(50), canvasHeightPct(66.67), canvasWidthPct(66.67), canvasHeightPct(36.67))
