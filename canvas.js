@@ -17,13 +17,17 @@ const c = canvas.getContext('2d')
 // Ideia, para ocupar o máximo da tela dar scale a partir de um fator do window.innerHeight
 // igual ao funcionamento do colonist.io
 
-let mouseDown = false
+let clickedCard = null
 let holdingCard = null
 let dropSelection = []
 let lastPhase
 let lastPlayer
 let mouseX = 0
 let mouseY = 0
+let mouseDownX = 0
+let mouseDownY = 0
+let mouseUpX = 0
+let mouseUpY = 0
 
 //-----------------------------CLASSES------------------------------------
 const velocity = 0.1 // card movement velocity
@@ -154,6 +158,9 @@ class Card {
         } else {
             this.y = this.yTarget
         }
+
+        this.highlight = dropSelection.includes(this)
+
         this.draw()
     }
   
@@ -351,13 +358,13 @@ class Hand extends Stack{
         return this.cards.splice(index, 1)[0]
     }
 
-    highlightCards(){
-        this.cards.forEach(card => {card.highlight = true})
-    }
+    // highlightCards(){
+    //     this.cards.forEach(card => {card.highlight = true})
+    // }
 
-    downlightCards(){
-        this.cards.forEach(card => {card.highlight = false})
-    }
+    // downlightCards(){
+    //     this.cards.forEach(card => {card.highlight = false})
+    // }
    
     insideArea(x, y){
         let n = this.cards.length
@@ -516,13 +523,11 @@ class Table {
                 }
             }
 
-            console.log("descontinuitys ", descontinuitys)
 
             if (descontinuitys != nJokers){
                 if (countValues["A"] == 1){
                     // Joga o ás para o final e checa de novo
                     cards.push(cards.shift())
-                    console.log("tentando mover o as: ", cards[2])
                     descontinuitys = 0
                     for (let i = 1; i < cards.length; i++){
                         if (i == cards.length - 1 && cards[i].value == "A") {
@@ -549,18 +554,13 @@ class Table {
                     descontinuitySize[i + descontinuitys] = VALUES.indexOf(cards[i].value) - 1 - VALUES.indexOf(cards[i-1].value)
                     descontinuitys += VALUES.indexOf(cards[i].value) - 1 - VALUES.indexOf(cards[i-1].value)
                 }
-                console.log("descontinuitySize ", descontinuitySize)
+                
                 for (let i in descontinuitySize){
                     for (let j = 0; j < descontinuitySize[i]; j++){
                         // add the number of necessary jokers to array at necessary index
                         cards.splice(parseInt(i) + j, 0, jokers.pop())
-                        console.log('added at ', parseInt(i) + j)
                     }
                 }
-                for (let i = 0; i < cards.length; i++){
-                    console.log(cards[i])
-                }
-                console.log(jokers)
             }
             
         } else if (type == 'trio'){
@@ -737,8 +737,8 @@ class Round{// Classe static pois não é necessário estanciá-la
     static deck
     static discardPile
     static table
-    static dropButton
-    static cancelButton
+    // static dropButton
+    // static cancelButton
     static player
     static bots
     static elements
@@ -746,6 +746,7 @@ class Round{// Classe static pois não é necessário estanciá-la
     static turn
     static phase // buy -> think <-> drop -> discard
                 //      fly <->  (phase that can happen on the think phase)
+                // new: excluding drop and discard phases
 
     static htmlDisplayAttributes() {
         // update the cells in the table with the values of the Round class attributes
@@ -764,16 +765,17 @@ class Round{// Classe static pois não é necessário estanciá-la
         Round.discardPile = new Discards(canvasWidthPct(66.67),  canvasHeightPct(35))
         Round.table = new Table(canvasWidthPct(50), canvasHeightPct(66.67), canvasWidthPct(66.67), canvasHeightPct(36.67))
         
-        Round.cancelButton = new Button(canvasWidthPct(8), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Cancel', false)
-        Round.dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Drop', false)
+        // Round.cancelButton = new Button(canvasWidthPct(8), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Cancel', false)
+        // Round.dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Drop', false)
         
         Round.player = new Player(Round.deck.buy(9), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
         const bot1 = new Bot(Round.deck.buy(9), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
         const bot2 = new Bot(Round.deck.buy(9), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
         const bot3 = new Bot(Round.deck.buy(9), canvasWidthPct(97) - Card.h/2, canvasHeightPct(50), 'right')
         Round.bots = [bot1, bot2, bot3]
-        
-        Round.elements = [Round.deck, Round.discardPile, Round.table, Round.cancelButton, Round.dropButton, Round.player, bot1, bot2, bot3]
+
+        //                                           Round.cancelButton, Round.dropButton,
+        Round.elements = [Round.deck, Round.discardPile, Round.table, Round.player, bot1, bot2, bot3]
         console.log(Round.elements)
 
         Round.order = [Round.player, bot2, bot1, bot3] // sentido horário
@@ -781,15 +783,16 @@ class Round{// Classe static pois não é necessário estanciá-la
         Round.phase = 'buy'
     }
 
-    static turnBoughtCard(from = 'deck'){
-        // player or bot of turn took an action to buy from deck or discardPile
-        if (from == 'deck'){
-            Round.turn.hand.add(Round.deck.buy())
-        } else if (from == 'discardPile' && Round.discardPile.buyable) {
-            Round.turn.hand.add(Round.discardPile.buy())
-        } else {
-            return false
-        }
+    static turnBoughtCardFromDeck(){
+        // player or bot of turn took an action to buy from deck
+        Round.turn.hand.add(Round.deck.buy())
+        Round.phase = 'think'
+        return true
+    }
+
+    static turnBoughtCardFromDiscard(){
+        // player or bot of turn took an action to buy from discardPile
+        Round.turn.hand.add(Round.discardPile.buy())
         Round.phase = 'think'
         return true
     }
@@ -817,26 +820,29 @@ class Round{// Classe static pois não é necessário estanciá-la
         Round.turn = player
         const lastCard = Round.discardPile.buy() 
         player.hand.add(lastCard)
-        Round.turn.hand.highlightCards()
-        Round.cancelButton.visible = true
-        Round.dropButton.visible = true
         dropSelection.push(lastCard)
-        lastCard.highlight = false
     }
 
-    static turnDiscardedCard(card){
-        Round.discardPile.add(Round.turn.hand.remove(card))
-        Round.endTurn()
+    static turnDiscardedCard(cards){
+        if (!Array.isArray(cards)){
+            cards = [cards]
+        }
+
+        if(cards.length == 1 && cards[0].value != "joker"){
+            Round.discardPile.add(Round.turn.hand.remove(cards[0]))
+            Round.endTurn()
+            return true
+        } else {
+            // ***Adicionar pop-up (?) de aviso
+            console.log('Nao pode descartar mais de uma carta ou joker')
+            dropSelection = []
+            return false
+        }
+
     }
 
     static endTurn() { // Finaliza o turno atual
-        const currentIndex = Round.order.indexOf(Round.turn)
-        // define o próximo jogador pela ordem
-        if (currentIndex == Round.order.length - 1) {
-            Round.turn = Round.order[0]
-        } else {
-            Round.turn = Round.order[currentIndex + 1]
-        }
+        Round.turn = Round.nextPlayer(Round.turn)
         Round.phase = 'buy'
         if (Round.bots.includes(Round.turn)) {
             // O bot joga
@@ -844,11 +850,21 @@ class Round{// Classe static pois não é necessário estanciá-la
         }
     }
 
+    static nextPlayer(player){
+        const currentIndex = Round.order.indexOf(player)
+        // define o próximo jogador pela ordem
+        if (currentIndex == Round.order.length - 1) {
+            return Round.order[0]
+        } else {
+            return Round.order[currentIndex + 1]
+        }
+    }
+
     
     static botPlay(){
         if (Round.phase == 'buy'){
             setTimeout(function() { 
-                Round.turnBoughtCard('deck');
+                Round.turnBoughtCardFromDeck();
                 // If someone buys on the fly, waits to discard a card
                 const checkPhase = setInterval(function() {
                     console.log('checks fly')
@@ -956,31 +972,31 @@ animate()
 
 
 addEventListener('mousedown', (event) => {
-    mouseDown = true
+    // *** Mover condições para as funções em Round
+    // *** tornar variaveis desse escopo globais
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    mouseDownX = event.clientX - rect.left;
+    mouseDownY = event.clientY - rect.top;
 
-    console.log(mouseX, mouseY)
+    // console.log(mouseX, mouseY)
 
     // Finds which card was clicked in some groups: player.hand, discardPile.cards, Table.combs
-    let clickedCard = null
-
+    clickedCard = null
     // Filter all cards if click was inside it
-    let possibleCards =  Round.player.hand.cards.filter(card => card.insideArea(x, y))
-    possibleCards = possibleCards.concat(Round.discardPile.cards.filter(card => card.insideArea(x, y)))
+    let possibleCards =  Round.player.hand.cards.filter(card => card.insideArea(mouseDownX, mouseDownY))
+    possibleCards = possibleCards.concat(Round.discardPile.cards.filter(card => card.insideArea(mouseDownX, mouseDownY)))
     for (let comb of Round.table.combs) {
-        possibleCards = possibleCards.concat(comb.cards.filter(card => card.insideArea(x, y)))
+        possibleCards = possibleCards.concat(comb.cards.filter(card => card.insideArea(mouseDownX, mouseDownY)))
     }
 
     if (possibleCards.length >= 1){
         // Find the closest card (by x corner) to the click point
         clickedCard = possibleCards[0]
-        let closest_dx = x - (clickedCard.x - Card.w/2)
+        let closest_dx = mouseDownX - (clickedCard.x - Card.w/2)
 
         for (let i = 1; i < possibleCards.length; i++) {
             let card = possibleCards[i]
-            let dx = x - (card.x - Card.w/2)
+            let dx = mouseDownX - (card.x - Card.w/2)
             if (dx < closest_dx){
                 clickedCard = card
                 closest_dx = dx
@@ -992,159 +1008,112 @@ addEventListener('mousedown', (event) => {
 
     // Check if click was to buy
     if (Round.turn == Round.player && Round.phase == 'buy'){
-        if (Round.deck.insideArea(x, y)){
-            Round.turnBoughtCard('deck')
+        if (Round.deck.insideArea(mouseDownX, mouseDownY)){
+            Round.turnBoughtCardFromDeck()
             return
-        } else if (Round.discardPile.buyable && Round.discardPile.lastCard().insideArea(x, y)){
-            Round.turnBoughtCard('discardPile')
+        } else if (Round.discardPile.buyable && Round.discardPile.lastCard() == clickedCard){
+            Round.turnBoughtCardFromDiscard()
             return
         }
     }
 
-    // Selected discardPile to discard
-    if (Round.turn == Round.player && Round.phase == 'think' && Round.discardPile.highlight){
-        Round.phase = 'discard'
-        Round.turn.hand.highlightCards()
+    // Clicks on discardPile to discard the selected card
+    // *** Adicionar warning se tentar jogar joker ou mais de uma carta
+    if (Round.turn == Round.player && Round.phase == 'think' && Round.discardPile.insideArea(mouseDownX, mouseDownY)){
+        Round.turnDiscardedCard(dropSelection) // termina o turno
+        dropSelection = []
         return
     }
 
     // Selected discardPile to buy on the fly
-    if (Round.turn != Round.player && Round.phase == 'think' && Round.discardPile.buyable && Round.discardPile.lastCard().insideArea(x, y)){
+    if (Round.turn != Round.player && Round.turn != Round.nextPlayer(Round.player) && Round.phase == 'think' && Round.discardPile.buyable && Round.discardPile.lastCard() == clickedCard){
         Round.boughtOnTheFLy(Round.player)
         return
     }
 
     // Selected Table to drop a combination
-    if (Round.turn == Round.player && Round.phase == 'think' && Round.table.highlight){
-        Round.phase = 'drop'
-        Round.turn.hand.highlightCards()
-        Round.cancelButton.visible = true
-        Round.dropButton.visible = true
-        return
-    }
-
-
-    // Selected dropButton to drop currently combination
-    if (Round.turn == Round.player && Round.phase == 'drop' && Round.dropButton.highlight){
-        const okay = Round.turnDroppedCombination(dropSelection)
-
+    if (Round.turn == Round.player && Round.phase == 'think' && Round.table.insideArea(mouseDownX, mouseDownY)){
+        Round.turnDroppedCombination(dropSelection)
         dropSelection = []
-
-        if (okay) {
-            Round.turn.hand.downlightCards()
-            Round.cancelButton.visible = false
-            Round.dropButton.visible = false
-            Round.phase = 'think'
-        } else {
-            Round.turn.hand.highlightCards()
-        }
-        
         return
     }
 
-    // Selected cancelButton to cancel the drop
-    if (Round.turn == Round.player && Round.phase == 'drop' && Round.cancelButton.highlight){
-        dropSelection = []
-        Round.turn.hand.downlightCards()
-        Round.cancelButton.visible = false
-        Round.dropButton.visible = false
-        Round.phase = 'think'
-        return
-    }
-
-    // Selected dropButton to drop currently combination on the fly
-    if (Round.turn == Round.player && Round.phase == 'fly' && Round.dropButton.highlight){
-        const okay = Round.turnDroppedCombination(dropSelection)
-
-        dropSelection = dropSelection.slice(0, 1)
-    
-        if (okay) {
-            Round.turn.hand.downlightCards()
-            Round.cancelButton.visible = false
-            Round.dropButton.visible = false
+    // Selected drop area to drop currently combination on the fly
+    if (Round.turn == Round.player && Round.phase == 'fly' && Round.table.insideArea(mouseDownX, mouseDownY)){
+        if (Round.turnDroppedCombination(dropSelection)) {
+            dropSelection = []
             Round.phase = 'think'
             Round.turn = lastPlayer
-        
         } else {
-            Round.turn.hand.highlightCards()
-            dropSelection[0].highlight = false
+            dropSelection = dropSelection.slice(0, 1)
         }
         
         return
     }
 
-    // Selected cancelButton to cancel the drop on the fly
-    if (Round.turn == Round.player && Round.phase == 'fly' && Round.cancelButton.highlight){
+    // Selected drop area to drop on the fly
+    if (Round.turn == Round.player && Round.phase == 'fly' && dropSelection.length == 1 && Round.discardPile.insideArea(mouseDownX, mouseDownY)){
         Round.turn.hand.remove(dropSelection[0])
         Round.discardPile.add(dropSelection[0])
         dropSelection = []
-        Round.turn.hand.downlightCards()
-        Round.cancelButton.visible = false
-        Round.dropButton.visible = false
         Round.phase = 'think'
         Round.turn = lastPlayer
         return
     }
 
-    if (clickedCard != null){
-        // Selected a card to compose the drop combination
-        if (Round.turn == Round.player && Round.phase == 'drop' && clickedCard.highlight){
-            dropSelection.push(clickedCard)
-            clickedCard.highlight = false
-            return
-        }
-
-        // Unselected a card to compose the drop combination
-        if (Round.turn == Round.player && Round.phase == 'drop' && !clickedCard.highlight){
-            // Remove card from array
-            dropSelection.splice(dropSelection.indexOf(clickedCard), 1)
-            clickedCard.highlight = true
-            return
-        }
-
-        // Selected a card to compose the drop combination on the fly
-        if (Round.turn == Round.player && Round.phase == 'fly' && clickedCard.highlight){
-            dropSelection.push(clickedCard)
-            clickedCard.highlight = false
-            return
-        }
-
-        // Unselected a card to compose the drop combination on the fly
-        if (Round.turn == Round.player && Round.phase == 'fly' && !clickedCard.highlight && clickedCard != dropSelection[0]){
-            // Remove card from array if its not the fly card
-            dropSelection.splice(dropSelection.indexOf(clickedCard), 1)
-            clickedCard.highlight = true
-            return
-        }
-        
-        // Selected a card to discard
-        if (Round.turn == Round.player && Round.phase == 'discard'){
-            Round.turn.hand.downlightCards()
-            Round.turnDiscardedCard(clickedCard) // termina o turno
-            return
-        }
+    if (clickedCard != null){        
     
         // Selected a card to move with mouse, cannot move card in drop or discard phases of player turn
-        if (Round.turn != Round.player || Round.phase == 'buy' || Round.phase == 'think'){
+        // if (Round.turn != Round.player || Round.phase == 'buy' || Round.phase == 'think'){
             if (clickedCard.grab.movable){
                 holdingCard = clickedCard
                 holdingCard.grab.holding = true
-                holdingCard.grab.dx = x - holdingCard.x
-                holdingCard.grab.dy = y - holdingCard.y
+                holdingCard.grab.dx = mouseDownX - holdingCard.x
+                holdingCard.grab.dy = mouseDownY - holdingCard.y
                 return
             }
-        }
+        // }
     }
 
     
 })
 
-addEventListener('mouseup', () => {
-    mouseDown = false
+addEventListener('mouseup', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    mouseUpX = x
+    mouseUpY = y
+
     if (holdingCard != null){
         holdingCard.grab.holding = false
         holdingCard = null
     }
+
+    // 3 pixels square tolerance
+    const notMoved = Math.abs(mouseDownX - mouseUpX) <= 3 && Math.abs(mouseDownY - mouseUpY) <= 3
+
+    if (clickedCard != null && Round.player.hand.cards.includes(clickedCard) && notMoved && Round.turn == Round.player && Round.phase != 'buy'){
+        // Selected or unselected a card to compose the drop combination
+        if (Round.phase == 'fly' && clickedCard == dropSelection[0]){
+            // Cant unselect the bought card on the fly
+            console.log('fly case, dropSelection:')
+            console.log(dropSelection)
+            return
+        } else {
+            if (dropSelection.includes(clickedCard)){
+                dropSelection.splice(dropSelection.indexOf(clickedCard), 1)
+            } else {
+                dropSelection.push(clickedCard)
+            }
+            console.log('selected card, dropSelection:')
+            console.log(dropSelection)
+            return
+        }
+        
+    }
+
 })
 
 addEventListener('mousemove', (event) => {
@@ -1156,14 +1125,10 @@ addEventListener('mousemove', (event) => {
     mouseY = y
 
     const cond1 = Round.turn == Round.player && holdingCard == null
-    const cond2 = Round.phase == 'think'
-    const cond3 = Round.phase == 'drop' || Round.phase == 'fly'
+    const cond2 = Round.phase == 'think' || Round.phase == 'fly'
     
     Round.discardPile.highlight = cond1 && cond2 && Round.discardPile.insideArea(mouseX, mouseY)
     Round.table.highlight = cond1 && cond2 && Round.table.insideArea(mouseX, mouseY)
-    
-    Round.cancelButton.highlight = cond1 && cond3 && Round.cancelButton.insideArea(mouseX, mouseY)
-    Round.dropButton.highlight = cond1 && cond3 && Round.dropButton.insideArea(mouseX, mouseY)
     
     // // Spread cards when mouse is over
     // if (Round.player.hand.insideArea(mouseX, mouseY)){
