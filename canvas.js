@@ -20,6 +20,8 @@ const c = canvas.getContext('2d')
 let mouseDown = false
 let holdingCard = null
 let dropSelection = []
+let lastPhase
+let lastPlayer
 let mouseX = 0
 let mouseY = 0
 
@@ -743,6 +745,7 @@ class Round{// Classe static pois não é necessário estanciá-la
     static order
     static turn
     static phase // buy -> think <-> drop -> discard
+                //      fly <->  (phase that can happen on the think phase)
 
     static htmlDisplayAttributes() {
         // update the cells in the table with the values of the Round class attributes
@@ -805,6 +808,22 @@ class Round{// Classe static pois não é necessário estanciá-la
         }
     }
 
+    static boughtOnTheFLy(player){
+        // precisa baixar um jogo com a carta e volta para o turno e phase
+        console.log('boughtOnTheFLy')
+        lastPhase = Round.phase
+        lastPlayer = Round.turn
+        Round.phase = 'fly'
+        Round.turn = player
+        const lastCard = Round.discardPile.buy() 
+        player.hand.add(lastCard)
+        Round.turn.hand.highlightCards()
+        Round.cancelButton.visible = true
+        Round.dropButton.visible = true
+        dropSelection.push(lastCard)
+        lastCard.highlight = false
+    }
+
     static turnDiscardedCard(card){
         Round.discardPile.add(Round.turn.hand.remove(card))
         Round.endTurn()
@@ -824,22 +843,23 @@ class Round{// Classe static pois não é necessário estanciá-la
             Round.botPlay()
         }
     }
+
     
     static botPlay(){
         if (Round.phase == 'buy'){
             setTimeout(function() { 
                 Round.turnBoughtCard('deck');
-
-                setTimeout(function() { 
-                    Round.turnDiscardedCard(Round.turn.hand.chooseRandomCard())
-                }, 1000);
-                
+                // If someone buys on the fly, waits to discard a card
+                const checkPhase = setInterval(function() {
+                    console.log('checks fly')
+                    if (Round.phase != 'fly') {
+                      clearInterval(checkPhase);
+                      Round.turnDiscardedCard(Round.turn.hand.chooseRandomCard())
+                    }
+                  }, 3000); // sets the bot play speed
             }, 1000);
-        }
-        // Waits 1 s to execute function
-        
+        }        
     }
-
 }
 
 //----------------------------AUX FUNCTIONS--------------------------
@@ -988,6 +1008,12 @@ addEventListener('mousedown', (event) => {
         return
     }
 
+    // Selected discardPile to buy on the fly
+    if (Round.turn != Round.player && Round.phase == 'think' && Round.discardPile.buyable && Round.discardPile.lastCard().insideArea(x, y)){
+        Round.boughtOnTheFLy(Round.player)
+        return
+    }
+
     // Selected Table to drop a combination
     if (Round.turn == Round.player && Round.phase == 'think' && Round.table.highlight){
         Round.phase = 'drop'
@@ -1001,7 +1027,9 @@ addEventListener('mousedown', (event) => {
     // Selected dropButton to drop currently combination
     if (Round.turn == Round.player && Round.phase == 'drop' && Round.dropButton.highlight){
         const okay = Round.turnDroppedCombination(dropSelection)
+
         dropSelection = []
+
         if (okay) {
             Round.turn.hand.downlightCards()
             Round.cancelButton.visible = false
@@ -1024,6 +1052,40 @@ addEventListener('mousedown', (event) => {
         return
     }
 
+    // Selected dropButton to drop currently combination on the fly
+    if (Round.turn == Round.player && Round.phase == 'fly' && Round.dropButton.highlight){
+        const okay = Round.turnDroppedCombination(dropSelection)
+
+        dropSelection = dropSelection.slice(0, 1)
+    
+        if (okay) {
+            Round.turn.hand.downlightCards()
+            Round.cancelButton.visible = false
+            Round.dropButton.visible = false
+            Round.phase = 'think'
+            Round.turn = lastPlayer
+        
+        } else {
+            Round.turn.hand.highlightCards()
+            dropSelection[0].highlight = false
+        }
+        
+        return
+    }
+
+    // Selected cancelButton to cancel the drop on the fly
+    if (Round.turn == Round.player && Round.phase == 'fly' && Round.cancelButton.highlight){
+        Round.turn.hand.remove(dropSelection[0])
+        Round.discardPile.add(dropSelection[0])
+        dropSelection = []
+        Round.turn.hand.downlightCards()
+        Round.cancelButton.visible = false
+        Round.dropButton.visible = false
+        Round.phase = 'think'
+        Round.turn = lastPlayer
+        return
+    }
+
     if (clickedCard != null){
         // Selected a card to compose the drop combination
         if (Round.turn == Round.player && Round.phase == 'drop' && clickedCard.highlight){
@@ -1035,6 +1097,21 @@ addEventListener('mousedown', (event) => {
         // Unselected a card to compose the drop combination
         if (Round.turn == Round.player && Round.phase == 'drop' && !clickedCard.highlight){
             // Remove card from array
+            dropSelection.splice(dropSelection.indexOf(clickedCard), 1)
+            clickedCard.highlight = true
+            return
+        }
+
+        // Selected a card to compose the drop combination on the fly
+        if (Round.turn == Round.player && Round.phase == 'fly' && clickedCard.highlight){
+            dropSelection.push(clickedCard)
+            clickedCard.highlight = false
+            return
+        }
+
+        // Unselected a card to compose the drop combination on the fly
+        if (Round.turn == Round.player && Round.phase == 'fly' && !clickedCard.highlight && clickedCard != dropSelection[0]){
+            // Remove card from array if its not the fly card
             dropSelection.splice(dropSelection.indexOf(clickedCard), 1)
             clickedCard.highlight = true
             return
@@ -1080,7 +1157,7 @@ addEventListener('mousemove', (event) => {
 
     const cond1 = Round.turn == Round.player && holdingCard == null
     const cond2 = Round.phase == 'think'
-    const cond3 = Round.phase == 'drop'
+    const cond3 = Round.phase == 'drop' || Round.phase == 'fly'
     
     Round.discardPile.highlight = cond1 && cond2 && Round.discardPile.insideArea(mouseX, mouseY)
     Round.table.highlight = cond1 && cond2 && Round.table.insideArea(mouseX, mouseY)
