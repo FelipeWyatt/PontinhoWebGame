@@ -180,7 +180,6 @@ class Stack {
             card.orientation = this.orientation;
             card.grab.movable = this.movable;
           });
-        
     }
     
     numberOfCards() {
@@ -220,7 +219,9 @@ class Stack {
     
     update() {
         if (this.numberOfCards() > 0) {
-            this.cards.forEach(card => {card.update()})
+            this.cards.forEach(card => {
+                card.update();
+            })
         }
     }
 }
@@ -357,14 +358,6 @@ class Hand extends Stack{
         const index = Math.floor(Math.random() * this.numberOfCards())
         return this.cards.splice(index, 1)[0]
     }
-
-    // highlightCards(){
-    //     this.cards.forEach(card => {card.highlight = true})
-    // }
-
-    // downlightCards(){
-    //     this.cards.forEach(card => {card.highlight = false})
-    // }
    
     insideArea(x, y){
         let n = this.cards.length
@@ -417,13 +410,51 @@ class Hand extends Stack{
 }
 
 class Combination extends Hand {
-    constructor(cards = [], xCenter = 0, yCenter = 0){
+    constructor(cards = [], xCenter = 0, yCenter = 0, type = null){
         super(cards, xCenter, yCenter, true, false, 'down', Hand.defaultSpacing, true)
+        this.type = type
+        this.highlight = false
     }
 
     calculateWidth(){
         return (this.spacing)*(this.numberOfCards() - 1) + Card.w
     }
+
+    addToCombination(cards){
+        let response = Table.checkCombination(this.cards.concat(cards))
+        let type = response[1]
+        cards = response[0]
+
+        if (cards != false){
+            // then cards is the cards array sorted
+            this.cards = cards
+            return true
+        }
+        return false
+    }
+
+    update(){
+        if (this.numberOfCards() > 0) {
+            this.cards.forEach(card => {
+                card.highlight = this.highlight;
+            })
+        }
+        super.update()
+    }
+    
+    // sort of seq depends on the joker placement, not as simple as below
+    // sort(){
+    //     if (this.type == 'seq'){
+    //         this.cards.sort(function(card1, card2){
+    //             return VALUES.indexOf(card1.value) - VALUES.indexOf(card2.value);
+    //         });
+    //     } else if (this.type == 'trio'){
+    //         this.cards.sort(function(card1, card2){
+    //             return SUITS.indexOf(card1.suit) - SUITS.indexOf(card2.suit);
+    //         });
+    //     }
+
+    // }
 }
 
 class Table {
@@ -588,14 +619,16 @@ class Table {
         } 
 
 
-        return cards
+        return [cards, type]
     }
 
     addCombination(cards){
         let response = Table.checkCombination(cards)
         if (response != false){
-            // then response is the cards array sorted
-            this.combs.push(new Combination(response, this.x, this.y))
+            let type = response[1]
+            cards = response[0]
+            console.log(response)
+            this.combs.push(new Combination(cards, this.x, this.y, type))
             return true
         }
         return false
@@ -834,7 +867,7 @@ class Round{// Classe static pois não é necessário estanciá-la
             return true
         } else {
             // ***Adicionar pop-up (?) de aviso
-            console.log('Nao pode descartar mais de uma carta ou joker')
+            console.log('Deve-se descartar somente uma carta e não colocada')
             dropSelection = []
             return false
         }
@@ -867,7 +900,6 @@ class Round{// Classe static pois não é necessário estanciá-la
                 Round.turnBoughtCardFromDeck();
                 // If someone buys on the fly, waits to discard a card
                 const checkPhase = setInterval(function() {
-                    console.log('checks fly')
                     if (Round.phase != 'fly') {
                       clearInterval(checkPhase);
                       Round.turnDiscardedCard(Round.turn.hand.chooseRandomCard())
@@ -1117,18 +1149,30 @@ addEventListener('mouseup', (event) => {
 })
 
 addEventListener('mousemove', (event) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-
-    mouseX = x
-    mouseY = y
+    const rect = canvas.getBoundingClientRect()
+    mouseX = event.clientX - rect.left
+    mouseY = event.clientY - rect.top
 
     const cond1 = Round.turn == Round.player && holdingCard == null
     const cond2 = Round.phase == 'think' || Round.phase == 'fly'
-    
-    Round.discardPile.highlight = cond1 && cond2 && Round.discardPile.insideArea(mouseX, mouseY)
-    Round.table.highlight = cond1 && cond2 && Round.table.insideArea(mouseX, mouseY)
+
+    if (cond1 && cond2) {
+        let insideAnyComb = false
+        for (let comb of Round.table.combs) {
+            if (comb.insideArea(mouseX, mouseY)){
+                insideAnyComb = true
+            }
+            comb.highlight = comb.insideArea(mouseX, mouseY)
+        }
+        if (insideAnyComb){
+            Round.table.highlight = false
+        } else {
+            Round.table.highlight = Round.table.insideArea(mouseX, mouseY)
+        }
+        Round.discardPile.highlight = Round.discardPile.insideArea(mouseX, mouseY)
+    }
+
+
     
     // // Spread cards when mouse is over
     // if (Round.player.hand.insideArea(mouseX, mouseY)){
