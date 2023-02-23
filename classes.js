@@ -1,5 +1,3 @@
-// Make Deck, Discard e Table statics so Player and Bot can access at any time
-
 //---------------------------CANVAS SETUP---------------------------------
 export const canvas = document.querySelector('canvas')
 
@@ -8,14 +6,79 @@ canvas.width = canvas.height //window.innerWidth;
 
 export const c = canvas.getContext('2d')
 
+//----------------------------AUX FUNCTIONS--------------------------
 
 export function canvasHeightPct(pct){
     return Math.round(canvas.height*pct/100)
 }
 
+
 export function canvasWidthPct(pct){
     return Math.round(canvas.width*pct/100)
 }
+
+
+function freshDeck() {
+    // Cria 2 listas com objetos únicos
+    let d1 = SUITS.flatMap(suit => {
+        return VALUES.map(value => {
+            return new Card(value, suit)
+        })
+    });
+
+    let d2 = SUITS.flatMap(suit => {
+        return VALUES.map(value => {
+            return new Card(value, suit)
+        })
+    });
+
+    let deck =  d1.concat(d2)
+    // Remove 5 joker para ter 3 no total
+    for (let i = 0; i < 5; i++){
+        let index = deck.findIndex(card => card.value == "joker")
+        if (index !== -1) {
+            deck.splice(index, 1);
+        }
+    }
+    return deck
+}
+
+function map(current, in_min, in_max, out_min, out_max) {
+    return ((current - in_min) * (out_max - out_min)) / (in_max - in_min) + out_min
+}
+
+function randomNumber(mean, maxDiff) {
+    // Generate a random number between mean - maxDiff and mean + maxDiff
+    return mean - maxDiff + (Math.random() * (maxDiff * 2))
+}
+
+function randomPointInCircle(centerX, centerY, maxRadius) {
+    // Generate a random radius between 0 and maxRadius
+    let radius = Math.random() * maxRadius
+  
+    // Generate a random angle between 0 and 2*PI
+    let angle = Math.random() * 2 * Math.PI
+  
+    // Calculate the x and y coordinates of the point on the circle at the given angle
+    let x = centerX + radius * Math.cos(angle)
+    let y = centerY + radius * Math.sin(angle)
+
+    // Return the point as an object with x and y properties
+    return { x, y }
+}
+
+function randomPointInSquare(centerX, centerY, halfSide) {
+    let max_dx = 2*halfSide - Card.w
+    let max_dy = 2*halfSide - Card.h
+
+    // Generate random x and y coordinates within the allowable range
+    let x = Math.random() * max_dx + (centerX - (halfSide - Card.w/2))
+    let y = Math.random() * max_dy + (centerY - (halfSide - Card.h/2))
+
+    // Return the point as an object with x and y properties
+    return { x, y }
+}
+
 
 let dropSelection = []
 
@@ -215,127 +278,170 @@ export class Stack {
         }
     }
 }
-  
 
 
-export class Deck extends Stack{
+
+export class Deck{
     
     static hSpacing = canvasWidthPct(2)
     static vSpacing = canvasHeightPct(0.5)
-
-    constructor(cards = freshDeck(), x = 0, y = 0) {
-        super(cards, x, y, false, 'down', false)
-        this.cards.forEach(card => {card.newPos(this.x, this.y)})
-        this.shuffle()
+    static cards
+    static x
+    static y
+    
+    static init(x, y) { 
+        Deck.cards = freshDeck()
+        Deck.x = x
+        Deck.y = y
+        Deck.cards.forEach(card => {
+            card.flipped = false;
+            card.orientation = 'down';
+            card.grab.movable = false;
+            card.newPos(Deck.x, Deck.y)
+          });
+        Deck.shuffle()
     }
 
-    insideArea(x, y){
-        const cond1 = Math.abs(this.x - x) <= Card.w/2 + Deck.hSpacing
-        const cond2 = Math.abs(this.y - y) <= Card.h/2 + Deck.vSpacing
+    static numberOfCards() {
+        return Deck.cards.length
+    }
+
+    static buy(){
+        return this.cards.pop()
+    }
+    
+    static insideArea(x, y){
+        const cond1 = Math.abs(Deck.x - x) <= Card.w/2 + Deck.hSpacing
+        const cond2 = Math.abs(Deck.y - y) <= Card.h/2 + Deck.vSpacing
         return cond1 && cond2
     }
 
   
-    shuffle() {
+    static shuffle() {
         // Randomize array in-place using Durstenfeld shuffle algorithm
-        for (let i = this.numberOfCards() - 1; i > 0; i--) {
+        for (let i = Deck.numberOfCards() - 1; i > 0; i--) {
             const newIndex = Math.floor(Math.random() * (i + 1))
-            const oldValue = this.cards[newIndex]
-            this.cards[newIndex] = this.cards[i]
-            this.cards[i] = oldValue
+            const oldValue = Deck.cards[newIndex]
+            Deck.cards[newIndex] = Deck.cards[i]
+            Deck.cards[i] = oldValue
         }
       
     }
 
 
-    update(){
-        let n = this.numberOfCards()
+    static update(){
+        let n = Deck.numberOfCards()
         if (n > 0) {
             let i = n - 4 // Só desenha as 4 últimas cartas do array
             if (i < 0) { i = 0 }
             while (i < n){
-                this.cards[i].newPos(this.x + Deck.hSpacing*(i - n + 2), this.y + Deck.vSpacing*(i - n + 2))
-                this.cards[i].update() // Only draw the last cards
+                Deck.cards[i].newPos(Deck.x + Deck.hSpacing*(i - n + 2), Deck.y + Deck.vSpacing*(i - n + 2))
+                Deck.cards[i].update() // Only draw the last cards
                 i++
             }
         }
     }
 }
 
-export class Discards extends Stack{
+export class Discards{
     static scatterRadius = canvasHeightPct(13)
     static cornerRadius = 4
+    static cards
+    static x
+    static y
+    static buyable
+    static highlight
+    static frame
 
-    constructor(x = 0, y = 0) {
-        super([], x, y, true, 'down', false)
+
+    static init(x, y) {
+        Discards.cards = []
+        Discards.x = x
+        Discards.y = y
+        Discards.cards.forEach(card => {
+            card.flipped = true;
+            card.orientation = 'down';
+            card.grab.movable = false;
+          });
         // Can only buy the last card
-        this.buyable = false
-        this.highlight = false
-        this.frame = false
+        Discards.buyable = false
+        Discards.highlight = false
+        Discards.frame = false
     }
 
-    lastCard(){
-        return this.cards[this.cards.length - 1]
+    static lastCard(){
+        return Discards.cards[Discards.cards.length - 1]
     }
+
+    static numberOfCards() {
+        return Discards.cards.length
+    }
+
   
-  
-    buy() {
+    static buy() {
         // Return the top card
-        if (this.buyable){
-            this.buyable = false
-            return super.buy()
+        if (Discards.buyable){
+            Discards.buyable = false
+            return Discards.cards.pop()
         } else {
             return false
         }
     }
   
-    add(card) {
+    static add(card) {
         // Add card to the end of the array
-        const loc = randomPointInSquare(this.x, this.y, Discards.scatterRadius)
+        const loc = randomPointInSquare(Discards.x, Discards.y, Discards.scatterRadius)
         card.newTargetPos(loc.x, loc.y)
-        super.add(card)
-        this.buyable = true
+        card.flipped = Discards.flipped
+        card.orientation = Discards.orientation
+        card.grab.movable = Discards.movable
+        Discards.cards.push(card)
+        Discards.buyable = true
     }
 
-    insideArea(x, y) {
+    static insideArea(x, y) {
         // check if it is inside circle
-        // const distance = Math.sqrt((x - this.x) ** 2 + (y - this.y) ** 2);
+        // const distance = Math.sqrt((x - Discards.x) ** 2 + (y - Discards.y) ** 2);
         // return distance <= Discards.scatterRadius;
-        return (Math.abs(x - this.x) <= Discards.scatterRadius && Math.abs(y - this.y) <= Discards.scatterRadius)
+        return (Math.abs(x - Discards.x) <= Discards.scatterRadius && Math.abs(y - Discards.y) <= Discards.scatterRadius)
     }
 
-    update(){
-        super.update()
+    static update(){
+        if (Discards.numberOfCards() > 0) {
+            Discards.cards.forEach(card => {
+                card.update();
+            })
+        }
 
-        if (this.highlight){
+        if (Discards.highlight){
             c.save();
             c.fillStyle = 'rgba(255, 255, 0, 0.3)';
 
             // Draw the square
             c.beginPath();
-            //c.rect(this.x - Discards.scatterRadius, this.y - Discards.scatterRadius, 2 * Discards.scatterRadius, 2 * Discards.scatterRadius);
-            //c.arc(this.x, this.y, Discards.scatterRadius, 0, 2 * Math.PI);
-            c.moveTo(this.x - Discards.scatterRadius + Discards.cornerRadius, this.y - Discards.scatterRadius);
-            c.arcTo(this.x + Discards.scatterRadius, this.y - Discards.scatterRadius, this.x + Discards.scatterRadius, this.y + Discards.scatterRadius, Discards.cornerRadius);
-            c.arcTo(this.x + Discards.scatterRadius, this.y + Discards.scatterRadius, this.x - Discards.scatterRadius, this.y + Discards.scatterRadius, Discards.cornerRadius);
-            c.arcTo(this.x - Discards.scatterRadius, this.y + Discards.scatterRadius, this.x - Discards.scatterRadius, this.y - Discards.scatterRadius, Discards.cornerRadius);
-            c.arcTo(this.x - Discards.scatterRadius, this.y - Discards.scatterRadius, this.x + Discards.scatterRadius, this.y - Discards.scatterRadius, Discards.cornerRadius);
+            //c.rect(Discards.x - Discards.scatterRadius, Discards.y - Discards.scatterRadius, 2 * Discards.scatterRadius, 2 * Discards.scatterRadius);
+            //c.arc(Discards.x, Discards.y, Discards.scatterRadius, 0, 2 * Math.PI);
+            c.moveTo(Discards.x - Discards.scatterRadius + Discards.cornerRadius, Discards.y - Discards.scatterRadius);
+            c.arcTo(Discards.x + Discards.scatterRadius, Discards.y - Discards.scatterRadius, Discards.x + Discards.scatterRadius, Discards.y + Discards.scatterRadius, Discards.cornerRadius);
+            c.arcTo(Discards.x + Discards.scatterRadius, Discards.y + Discards.scatterRadius, Discards.x - Discards.scatterRadius, Discards.y + Discards.scatterRadius, Discards.cornerRadius);
+            c.arcTo(Discards.x - Discards.scatterRadius, Discards.y + Discards.scatterRadius, Discards.x - Discards.scatterRadius, Discards.y - Discards.scatterRadius, Discards.cornerRadius);
+            c.arcTo(Discards.x - Discards.scatterRadius, Discards.y - Discards.scatterRadius, Discards.x + Discards.scatterRadius, Discards.y - Discards.scatterRadius, Discards.cornerRadius);
             
             c.fill();
             c.restore();
         }
 
-        if (this.frame){
+        if (Discards.frame){
             c.save();
             c.strokeStyle = 'rgba(255, 25, 25, 1)';
             c.lineWidth = 3;
             
             c.beginPath();
-            c.moveTo(this.x - Discards.scatterRadius + Discards.cornerRadius, this.y - Discards.scatterRadius);
-            c.arcTo(this.x + Discards.scatterRadius, this.y - Discards.scatterRadius, this.x + Discards.scatterRadius, this.y + Discards.scatterRadius, Discards.cornerRadius);
-            c.arcTo(this.x + Discards.scatterRadius, this.y + Discards.scatterRadius, this.x - Discards.scatterRadius, this.y + Discards.scatterRadius, Discards.cornerRadius);
-            c.arcTo(this.x - Discards.scatterRadius, this.y + Discards.scatterRadius, this.x - Discards.scatterRadius, this.y - Discards.scatterRadius, Discards.cornerRadius);
-            c.arcTo(this.x - Discards.scatterRadius, this.y - Discards.scatterRadius, this.x + Discards.scatterRadius, this.y - Discards.scatterRadius, Discards.cornerRadius);
+            c.moveTo(Discards.x - Discards.scatterRadius + Discards.cornerRadius, Discards.y - Discards.scatterRadius);
+            c.arcTo(Discards.x + Discards.scatterRadius, Discards.y - Discards.scatterRadius, Discards.x + Discards.scatterRadius, Discards.y + Discards.scatterRadius, Discards.cornerRadius);
+            c.arcTo(Discards.x + Discards.scatterRadius, Discards.y + Discards.scatterRadius, Discards.x - Discards.scatterRadius, Discards.y + Discards.scatterRadius, Discards.cornerRadius);
+            c.arcTo(Discards.x - Discards.scatterRadius, Discards.y + Discards.scatterRadius, Discards.x - Discards.scatterRadius, Discards.y - Discards.scatterRadius, Discards.cornerRadius);
+            c.arcTo(Discards.x - Discards.scatterRadius, Discards.y - Discards.scatterRadius, Discards.x + Discards.scatterRadius, Discards.y - Discards.scatterRadius, Discards.cornerRadius);
             
             
             c.stroke();
@@ -467,18 +573,22 @@ export class Combination extends Hand {
 
 export class Table {
     static cornerRadius = 4
+    static combs = []
+    static highlight = false
+    static frame = false
+    static x
+    static y
+    static w
+    static h
+    static internalSpacing
 
-    constructor(xCenter, yCenter, w, h, internalSpacing = canvasWidthPct(1.67)){
-        this.combs = []
-        this.x = xCenter
-        this.y = yCenter
-        this.w = w
-        this.h = h
-        this.internalSpacing = internalSpacing
-        this.flipped = true
-        this.orientation = 'down'
-        this.highlight = false
-        this.frame = false
+
+    static init(xCenter, yCenter, w, h, internalSpacing = canvasWidthPct(1.67)){
+        Table.x = xCenter
+        Table.y = yCenter
+        Table.w = w
+        Table.h = h
+        Table.internalSpacing = internalSpacing
     }
 
     static checkCombination(cards, ending = false){
@@ -631,73 +741,73 @@ export class Table {
         return [cards, type]
     }
 
-    addCombination(cards){
+    static addCombination(cards){
         let response = Table.checkCombination(cards)
         if (response != false){
             let type = response[1]
             cards = response[0]
             console.log(response)
-            this.combs.push(new Combination(cards, this.x, this.y, type))
+            Table.combs.push(new Combination(cards, Table.x, Table.y, type))
             return true
         }
         return false
     }
 
-    insideArea(x, y){
-        return Math.abs(this.x - x) <= this.w/2 && Math.abs(this.y - y) <= this.h/2
+    static insideArea(x, y){
+        return Math.abs(Table.x - x) <= Table.w/2 && Math.abs(Table.y - y) <= Table.h/2
     }
 
-    update(){
-        if (this.combs.length > 0){
+    static update(){
+        if (Table.combs.length > 0){
             // Define os lugares das combinations
-            let xCorner = this.x - this.w/2
-            let yCorner = this.y - this.h/2
-            let xComb = xCorner + this.internalSpacing// x dimension of corner of comb
-            let yComb = yCorner + this.internalSpacing + Card.h/2 // y dimension of corner of comb
-            for (let comb of this.combs){
+            let xCorner = Table.x - Table.w/2
+            let yCorner = Table.y - Table.h/2
+            let xComb = xCorner + Table.internalSpacing// x dimension of corner of comb
+            let yComb = yCorner + Table.internalSpacing + Card.h/2 // y dimension of corner of comb
+            for (let comb of Table.combs){
                 let comp = comb.calculateWidth()
     
-                if (xComb + comp > this.x + this.w/2){
+                if (xComb + comp > Table.x + Table.w/2){
                     // Se sair da largura da Table, "adiciona mais uma linha"
-                    yComb += Card.h + this.internalSpacing
-                    xComb = xCorner + this.internalSpacing
+                    yComb += Card.h + Table.internalSpacing
+                    xComb = xCorner + Table.internalSpacing
                 }
     
                 comb.x = xComb + comp/2
                 comb.y = yComb
     
-                xComb += comp + this.internalSpacing
+                xComb += comp + Table.internalSpacing
     
                 comb.update()
             }
         }
 
-        if (this.highlight){
+        if (Table.highlight){
             c.save();
             c.fillStyle = 'rgba(255, 255, 0, 0.3)';
 
             c.beginPath();
-            c.moveTo(this.x - this.w/2 + Table.cornerRadius, this.y - this.h/2);
-            c.arcTo(this.x + this.w/2, this.y - this.h/2, this.x + this.w/2, this.y + this.h/2, Table.cornerRadius);
-            c.arcTo(this.x + this.w/2, this.y + this.h/2, this.x - this.w/2, this.y + this.h/2, Table.cornerRadius);
-            c.arcTo(this.x - this.w/2, this.y + this.h/2, this.x - this.w/2, this.y - this.h/2, Table.cornerRadius);
-            c.arcTo(this.x - this.w/2, this.y - this.h/2, this.x + this.w/2, this.y - this.h/2, Table.cornerRadius);
+            c.moveTo(Table.x - Table.w/2 + Table.cornerRadius, Table.y - Table.h/2);
+            c.arcTo(Table.x + Table.w/2, Table.y - Table.h/2, Table.x + Table.w/2, Table.y + Table.h/2, Table.cornerRadius);
+            c.arcTo(Table.x + Table.w/2, Table.y + Table.h/2, Table.x - Table.w/2, Table.y + Table.h/2, Table.cornerRadius);
+            c.arcTo(Table.x - Table.w/2, Table.y + Table.h/2, Table.x - Table.w/2, Table.y - Table.h/2, Table.cornerRadius);
+            c.arcTo(Table.x - Table.w/2, Table.y - Table.h/2, Table.x + Table.w/2, Table.y - Table.h/2, Table.cornerRadius);
             
             c.fill();
             c.restore();
         }
 
-        if (this.frame){
+        if (Table.frame){
             c.save();
             c.strokeStyle = 'rgba(109, 237, 66, 1)';
             c.lineWidth = 3;
 
             c.beginPath();
-            c.moveTo(this.x - this.w/2 + Table.cornerRadius, this.y - this.h/2);
-            c.arcTo(this.x + this.w/2, this.y - this.h/2, this.x + this.w/2, this.y + this.h/2, Table.cornerRadius);
-            c.arcTo(this.x + this.w/2, this.y + this.h/2, this.x - this.w/2, this.y + this.h/2, Table.cornerRadius);
-            c.arcTo(this.x - this.w/2, this.y + this.h/2, this.x - this.w/2, this.y - this.h/2, Table.cornerRadius);
-            c.arcTo(this.x - this.w/2, this.y - this.h/2, this.x + this.w/2, this.y - this.h/2, Table.cornerRadius);
+            c.moveTo(Table.x - Table.w/2 + Table.cornerRadius, Table.y - Table.h/2);
+            c.arcTo(Table.x + Table.w/2, Table.y - Table.h/2, Table.x + Table.w/2, Table.y + Table.h/2, Table.cornerRadius);
+            c.arcTo(Table.x + Table.w/2, Table.y + Table.h/2, Table.x - Table.w/2, Table.y + Table.h/2, Table.cornerRadius);
+            c.arcTo(Table.x - Table.w/2, Table.y + Table.h/2, Table.x - Table.w/2, Table.y - Table.h/2, Table.cornerRadius);
+            c.arcTo(Table.x - Table.w/2, Table.y - Table.h/2, Table.x + Table.w/2, Table.y - Table.h/2, Table.cornerRadius);
             
             c.stroke();
             c.restore();
@@ -785,6 +895,19 @@ export class Player {
         this.y = y
         this.orientation = orientation
         this.hand = new Hand(cards, this.x, this.y, true, true, this.orientation, Card.w + 2)
+    }
+
+    turnBuyFromDeck(){
+        // player or bot of turn took an action to buy from deck
+        Round.turn.hand.add(Round.deck.buy())
+    }
+
+    turnBuyFromDiscardPile(){
+        // player or bot of turn took an action to buy from discardPile
+        // Round.turn.hand.add(Round.discardPile.buy())
+        const lastCard = Round.discardPile.buy() 
+        Round.turn.hand.add(lastCard)
+        dropSelection.push(lastCard)
     }
 
     update(){

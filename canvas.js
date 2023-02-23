@@ -266,68 +266,7 @@ class Round{// Classe static pois não é necessário estanciá-la
     // }
 }
 
-//----------------------------AUX FUNCTIONS--------------------------
 
-function freshDeck() {
-    // Cria 2 listas com objetos únicos
-    let d1 = SUITS.flatMap(suit => {
-        return VALUES.map(value => {
-            return new Card(value, suit)
-        })
-    });
-
-    let d2 = SUITS.flatMap(suit => {
-        return VALUES.map(value => {
-            return new Card(value, suit)
-        })
-    });
-
-    let deck =  d1.concat(d2)
-    // Remove 5 joker para ter 3 no total
-    for (let i = 0; i < 5; i++){
-        let index = deck.findIndex(card => card.value == "joker")
-        if (index !== -1) {
-            deck.splice(index, 1);
-        }
-    }
-    return deck
-}
-
-function map(current, in_min, in_max, out_min, out_max) {
-    return ((current - in_min) * (out_max - out_min)) / (in_max - in_min) + out_min
-}
-
-function randomNumber(mean, maxDiff) {
-    // Generate a random number between mean - maxDiff and mean + maxDiff
-    return mean - maxDiff + (Math.random() * (maxDiff * 2))
-}
-
-function randomPointInCircle(centerX, centerY, maxRadius) {
-    // Generate a random radius between 0 and maxRadius
-    let radius = Math.random() * maxRadius
-  
-    // Generate a random angle between 0 and 2*PI
-    let angle = Math.random() * 2 * Math.PI
-  
-    // Calculate the x and y coordinates of the point on the circle at the given angle
-    let x = centerX + radius * Math.cos(angle)
-    let y = centerY + radius * Math.sin(angle)
-
-    // Return the point as an object with x and y properties
-    return { x, y }
-}
-
-function randomPointInSquare(centerX, centerY, halfSide) {
-    let max_dx = 2*halfSide - Card.w
-    let max_dy = 2*halfSide - Card.h
-
-    // Generate random x and y coordinates within the allowable range
-    let x = Math.random() * max_dx + (centerX - (halfSide - Card.w/2))
-    let y = Math.random() * max_dy + (centerY - (halfSide - Card.h/2))
-
-    // Return the point as an object with x and y properties
-    return { x, y }
-}
   
   
 //---------------------------------MAIN------------------------------
