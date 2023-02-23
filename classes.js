@@ -874,43 +874,57 @@ export class Button {
     }
 }
 
-
-export class Bot {
-    constructor(cards, x, y, orientation = 'up'){
+class Player {
+    constructor(cards, x, y, orientation, flipped, movable, spacing){
         this.x = x
         this.y = y
         this.orientation = orientation
-        this.hand = new Hand(cards, this.x, this.y, false, false, this.orientation, Hand.defaultSpacing)
+        this.hand = new Hand(cards, this.x, this.y, flipped, movable, this.orientation, spacing)
     }
 
+    buyFromDeck(){
+        // player took an action to buy from deck
+        this.hand.add(Deck.buy())
+    }
+
+    buyFromDiscards(){
+        // player took an action to buy from discardPile
+        const lastCard = Discards.buy() 
+        this.hand.add(lastCard)
+        return lastCard
+    } 
+
+    dropCombination(cards){
+        if(Table.addCombination(cards)){
+            for (let card of cards) {
+                this.hand.remove(card)
+            }
+            console.log('combinacao adicionada okay')
+            return true
+        } else {
+            // ***Adicionar pop-up (?) de aviso
+            console.log('Combinacao invalida')
+            return false
+        }
+    }
+
+    discardCard(card){
+        Discards.add(this.hand.remove(card))
+    }
 
     update(){
         this.hand.update()
     }
 }
 
-export class Player {
-    constructor(cards, x, y, orientation = 'down'){
-        this.x = x
-        this.y = y
-        this.orientation = orientation
-        this.hand = new Hand(cards, this.x, this.y, true, true, this.orientation, Card.w + 2)
+export class Bot extends Player {
+    constructor(cards, x, y, orientation){
+        super(cards, x, y, orientation, false, false, Hand.defaultSpacing)
     }
+}
 
-    turnBuyFromDeck(){
-        // player or bot of turn took an action to buy from deck
-        Round.turn.hand.add(Round.deck.buy())
-    }
-
-    turnBuyFromDiscardPile(){
-        // player or bot of turn took an action to buy from discardPile
-        // Round.turn.hand.add(Round.discardPile.buy())
-        const lastCard = Round.discardPile.buy() 
-        Round.turn.hand.add(lastCard)
-        dropSelection.push(lastCard)
-    }
-
-    update(){
-        this.hand.update()
+export class User extends Player{
+    constructor(cards, x, y){
+        super(cards, x, y, 'down', true, true, Card.w + 2)
     }
 }
