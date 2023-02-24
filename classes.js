@@ -291,7 +291,7 @@ export class Deck{
             card.grab.movable = false;
             card.newPos(Deck.x, Deck.y)
           });
-        Deck.shuffle()
+        // Deck.shuffle()
     }
 
     static numberOfCards() {
@@ -541,12 +541,10 @@ export class Combination extends Hand {
 
     addToCombination(cards){
         let response = Table.checkCombination(this.cards.concat(cards))
-        let type = response[1]
-        cards = response[0]
-
-        if (cards != false){
+        console.log(response)
+        if (response != false){
             // then cards is the cards array sorted
-            this.cards = cards
+            this.cards = response[0] // [cards, type]
             return true
         }
         return false
@@ -901,6 +899,20 @@ class Player {
 
     dropCombination(cards){
         if(Table.addCombination(cards)){
+            for (let card of cards) {
+                this.hand.remove(card)
+            }
+            console.log('combinacao adicionada okay')
+            return true
+        } else {
+            // ***Adicionar pop-up (?) de aviso
+            console.log('Combinacao invalida')
+            return false
+        }
+    }
+
+    addToCombination(cards, comb){
+        if(comb.addToCombination(cards)){
             for (let card of cards) {
                 this.hand.remove(card)
             }

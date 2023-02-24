@@ -114,19 +114,23 @@ function stateMachineUpdate(){
                 dropSelection = []
                 // Next turn
                 turn = nextPlayer(turn)
-                phase = 'buy'
-                // if (bots.includes(turn)) {
-                //     // O bot joga
-                //     botPlay()
-                // }
+                phase = 'buy'  
+            // user added cards to combination
+            } else if (dropSelection.length >= 1){
+                for (let comb of Table.combs){
+                    if (comb.insideArea(mouseDownX, mouseDownY)){
+                        user.addToCombination(dropSelection, comb)
+                        dropSelection = []
+                        return
+                    }
+                }
+            }
 
             // user dropped a combination
-            } else if (Table.insideArea(mouseDownX, mouseDownY)){
+            if (Table.insideArea(mouseDownX, mouseDownY)){
                 user.dropCombination(dropSelection)
                 dropSelection = []
             }
-
-
         } else if (phase == 'fly') {
             // Selected drop area to drop currently combination on the fly
             if (Table.insideArea(mouseDownX, mouseDownY)){
