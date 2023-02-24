@@ -396,13 +396,18 @@ export class Discards{
   
     static add(card) {
         // Add card to the end of the array
+        const lastCard = this.lastCard()
         const loc = randomPointInSquare(Discards.x, Discards.y, Discards.scatterRadius)
         card.newTargetPos(loc.x, loc.y)
         card.flipped = true
         card.orientation = 'down'
         card.grab.movable = false
+        card.highlight = false
         Discards.cards.push(card)
         Discards.buyable = true
+        if (lastCard != null) {
+            lastCard.highlight = false // pode estar acessa se mouse estiver em cima e outra carta for jogada
+        }
     }
 
     static insideArea(x, y) {
@@ -416,7 +421,6 @@ export class Discards{
         if (Discards.numberOfCards() > 0) {
             Discards.cards.forEach(card => {
                 card.update();
-                card.highlight = false;
             })
         }
 
