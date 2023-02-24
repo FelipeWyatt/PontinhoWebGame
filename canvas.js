@@ -25,6 +25,7 @@ let mouseDownY = 0
 let mouseUpX = 0
 let mouseUpY = 0
 const botSlowness = 120 // time for bot to play = botSlowness/60 [s] 
+let frameCount = 0
 
 
 let user
@@ -45,10 +46,10 @@ function init(){
     // cancelButton = new Button(canvasWidthPct(8), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Cancel', false)
     // dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Drop', false)
     
-    user = new User(Deck.buy(9), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
-    const bot1 = new Bot(Deck.buy(9), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
-    const bot2 = new Bot(Deck.buy(9), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
-    const bot3 = new Bot(Deck.buy(9), canvasWidthPct(97) - Card.h/2, canvasHeightPct(50), 'right')
+    user = new User(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
+    const bot1 = new Bot(Deck.newHand(9), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
+    const bot2 = new Bot(Deck.newHand(9), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
+    const bot3 = new Bot(Deck.newHand(9), canvasWidthPct(97) - Card.h/2, canvasHeightPct(50), 'right')
     bots = [bot1, bot2, bot3]
 
     //                                           cancelButton, dropButton,
@@ -185,8 +186,8 @@ function botPlayCheck(){
 //     }
 // }
 
-function nextuser(user){
-    const currentIndex = order.indexOf(user)
+function nextPlayer(player){
+    const currentIndex = order.indexOf(player)
     // define o próximo jogador pela ordem
     if (currentIndex == order.length - 1) {
         return order[0]
@@ -226,7 +227,7 @@ function animate(){ // default FPS = 60
     elements.forEach(elem => {elem.update()})
     // desenha a carta segurada por ultimo para ficar em primeiro
     if (holdingCard != null){
-        holdingCard.draw()
+        holdingCard.update()
     }
 
 
@@ -240,7 +241,6 @@ function animate(){ // default FPS = 60
 
 
 init()
-let frameCount = 0
 animate()
 
 
@@ -329,12 +329,12 @@ addEventListener('mousemove', (event) => {
     mouseX = event.clientX - rect.left
     mouseY = event.clientY - rect.top
 
-    if (holdingCard != null && holdingCard.grab.movable) {
-        holdingCard.newTargetPos(mouseX, mouseY)
+    if (holdingCard != null) {
+        holdingCard.newPos(mouseX - holdingCard.grab.dx, mouseY - holdingCard.grab.dy)
     }
 
     const cond1 = turn == user && holdingCard == null && dropSelection.length >= 1
-    const cond2 = phase == 'think' || phase == 'fly'
+    const cond2 = phase != 'buy'
 
     let insideAnyComb = false
     for (let comb of Table.combs) {

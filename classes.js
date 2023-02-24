@@ -80,8 +80,6 @@ function randomPointInSquare(centerX, centerY, halfSide) {
 }
 
 
-let dropSelection = []
-
 //-----------------------------CLASSES------------------------------------
 const velocity = 0.1 // card movement velocity
 const SUITS = ["♠", "♣", "♥", "♦"]
@@ -195,10 +193,6 @@ export class Card {
     }
 
     update(){
-        // if (this.grab.movable && this.grab.holding){
-        //     this.newPos(mouseX - this.grab.dx , mouseY - this.grab.dy)
-        // }
-
         // Checa se está dentro da coordenada target, com uma tolerancia de 1 pixel
         if (Math.abs(this.x - this.xTarget) >= 1){
             this.x += velocity*(this.xTarget - this.x)
@@ -211,8 +205,6 @@ export class Card {
         } else {
             this.y = this.yTarget
         }
-
-        this.highlight = dropSelection.includes(this)
 
         this.draw()
     }
@@ -232,7 +224,7 @@ export class Stack {
             card.flipped = this.flipped;
             card.orientation = this.orientation;
             card.grab.movable = this.movable;
-          });
+          })
     }
     
     numberOfCards() {
@@ -308,6 +300,14 @@ export class Deck{
 
     static buy(){
         return this.cards.pop()
+    }
+
+    static newHand(){
+        const removedCards = [];
+        for (let i = 0; i < 9; i++) {
+            removedCards.push(this.cards.pop())
+        }
+        return removedCards;
     }
     
     static insideArea(x, y){
@@ -392,9 +392,9 @@ export class Discards{
         // Add card to the end of the array
         const loc = randomPointInSquare(Discards.x, Discards.y, Discards.scatterRadius)
         card.newTargetPos(loc.x, loc.y)
-        card.flipped = Discards.flipped
-        card.orientation = Discards.orientation
-        card.grab.movable = Discards.movable
+        card.flipped = true
+        card.orientation = 'down'
+        card.grab.movable = false
         Discards.cards.push(card)
         Discards.buyable = true
     }
@@ -410,6 +410,7 @@ export class Discards{
         if (Discards.numberOfCards() > 0) {
             Discards.cards.forEach(card => {
                 card.update();
+                card.highlight = false;
             })
         }
 
@@ -498,7 +499,9 @@ export class Hand extends Stack{
             }
 
             for (let i = 0; i < n; i++){
-                this.cards[i].newTargetPos(xi + (this.spacing)*i, this.y)
+                if (!this.cards[i].grab.holding){ // Altera a posicao so se carta nao esta sendo segurada
+                    this.cards[i].newTargetPos(xi + (this.spacing)*i, this.y)
+                }
             }
             
             // Reverte para desenhar as cartas da esquerda para direita
@@ -512,7 +515,9 @@ export class Hand extends Stack{
             }
             
             for (let i = 0; i < n; i++){
-                this.cards[i].newTargetPos(this.x, yi + (this.spacing)*i)
+                if (!this.cards[i].grab.holding){
+                    this.cards[i].newTargetPos(this.x, yi + (this.spacing)*i)
+                }
             }
 
             // Reverte para desenhar as cartas da esquerda para direita
