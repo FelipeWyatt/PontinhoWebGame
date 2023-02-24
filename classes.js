@@ -277,6 +277,7 @@ export class Deck{
     
     static hSpacing = canvasWidthPct(2)
     static vSpacing = canvasHeightPct(0.5)
+    static highlight
     static cards
     static x
     static y
@@ -292,6 +293,7 @@ export class Deck{
             card.newPos(Deck.x, Deck.y)
           });
         // Deck.shuffle()
+        Deck.highlight = false
     }
 
     static numberOfCards() {
@@ -336,6 +338,7 @@ export class Deck{
             if (i < 0) { i = 0 }
             while (i < n){
                 Deck.cards[i].newPos(Deck.x + Deck.hSpacing*(i - n + 2), Deck.y + Deck.vSpacing*(i - n + 2))
+                Deck.cards[i].highlight = Deck.highlight
                 Deck.cards[i].update() // Only draw the last cards
                 i++
             }
@@ -370,7 +373,10 @@ export class Discards{
     }
 
     static lastCard(){
-        return Discards.cards[Discards.cards.length - 1]
+        if (Discards.numberOfCards() > 0){
+            return Discards.cards[Discards.cards.length - 1]
+        }
+        return null
     }
 
     static numberOfCards() {

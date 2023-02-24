@@ -1,5 +1,5 @@
 //------------------------------IMPORTS-----------------------------------
-import {Card, Deck, Discards, Table, Button, User, Bot} from './classes.js';
+import {Card, Deck, Discards, Table, Button, User, Bot, Combination} from './classes.js';
 import {canvas, c} from './classes.js';
 import {canvasHeightPct, canvasWidthPct} from './classes.js';
 // import ace from './img/png/1x/spade_1.png'
@@ -15,7 +15,7 @@ import {canvasHeightPct, canvasWidthPct} from './classes.js';
 // Ideia, para ocupar o máximo da tela dar scale a partir de um fator do window.innerHeight
 // igual ao funcionamento do colonist.io
 
-let clickedCard = null
+let clickedElement = null
 let holdingCard = null
 let dropSelection = []
 let mouseX = 0
@@ -76,19 +76,19 @@ function stateMachineUpdate(){
         // Possible actions when in 'buy' state
         if (phase == 'buy'){
             // user buys from deck
-            if (Deck.numberOfCards() > 0 && Deck.insideArea(mouseDownX, mouseDownY)){
+            if (Deck.numberOfCards() > 0 && clickedElement == Deck){
                 user.buyFromDeck()
                 phase = 'think' // Next state
             
             // user buys from discard pile
-            } else if (Discards.buyable && Discards.lastCard() == clickedCard){
+            } else if (Discards.buyable && clickedElement == Discards.lastCard()){
                 dropSelection = [user.buyFromDiscards()]
                 phase = 'drop'
             }
 
         // Possible actions when in 'drop' state
         } else if (phase == 'drop'){
-            if (Table.insideArea(mouseDownX, mouseDownY)){
+            if (clickedElement == Table){
                 if (user.dropCombination(dropSelection)) {
                     dropSelection = []
                     phase = 'think'
@@ -97,7 +97,7 @@ function stateMachineUpdate(){
                     dropSelection = dropSelection.slice(0, 1)
                 }
             // Click on discard pile to cancel the drop
-            } else if (dropSelection.length == 1 && Discards.insideArea(mouseDownX, mouseDownY)){
+            } else if (dropSelection.length == 1 && clickedElement == Discards){
                 user.discardCard(dropSelection[0])
                 dropSelection = []
                 // Next turn
@@ -109,31 +109,27 @@ function stateMachineUpdate(){
         } else if (phase == 'think'){
             // Discard a card and calls next user
             // *** Adicionar warning se tentar jogar joker ou mais de uma carta
-            if (dropSelection.length == 1 && dropSelection[0].value != "joker" && Discards.insideArea(mouseDownX, mouseDownY)){
+            if (dropSelection.length == 1 && dropSelection[0].value != "joker" && clickedElement == Discards){
                 user.discardCard(dropSelection[0])
                 dropSelection = []
                 // Next turn
                 turn = nextPlayer(turn)
                 phase = 'buy'  
+
             // user added cards to combination
-            } else if (dropSelection.length >= 1){
-                for (let comb of Table.combs){
-                    if (comb.insideArea(mouseDownX, mouseDownY)){
-                        user.addToCombination(dropSelection, comb)
-                        dropSelection = []
-                        return
-                    }
-                }
-            }
+            } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
+                user.addToCombination(dropSelection, clickedElement)
+                dropSelection = []
 
             // user dropped a combination
-            if (Table.insideArea(mouseDownX, mouseDownY)){
+            } else if (dropSelection.length >= 3 && clickedElement == Table){
                 user.dropCombination(dropSelection)
                 dropSelection = []
             }
+
         } else if (phase == 'fly') {
             // Selected drop area to drop currently combination on the fly
-            if (Table.insideArea(mouseDownX, mouseDownY)){
+            if (dropSelection.length >= 3 && clickedElement == Table){
                 if (user.dropCombination(dropSelection)) {
                     dropSelection = []
                     phase = 'think'
@@ -143,7 +139,7 @@ function stateMachineUpdate(){
                 }
 
             // Selected drop area to cancel the fly
-            } else if (dropSelection.length == 1 && Discards.insideArea(mouseDownX, mouseDownY)){
+            } else if (dropSelection.length == 1 && clickedElement == Discards){
                 user.discardCard(dropSelection[0])
                 dropSelection = []
                 phase = 'think'
@@ -153,7 +149,7 @@ function stateMachineUpdate(){
 
     } else { // Not user turn
         // Selected discardPile to buy on the fly
-        if (turn != nextPlayer(user) && phase == 'think' && Discards.buyable && Discards.lastCard() == clickedCard){
+        if (turn != nextPlayer(user) && phase == 'think' && Discards.buyable && clickedElement == Discards.lastCard()){
             lastTurn = turn
             phase = 'fly'
             turn = user
@@ -253,35 +249,58 @@ addEventListener('mousedown', (event) => {
     mouseDownX = event.clientX - rect.left;
     mouseDownY = event.clientY - rect.top;
 
-    // Finds which card was clicked in some groups: user.hand, discardPile.cards, Table.combs
-    clickedCard = null
-    // Filter all cards if click was inside it
-    let possibleCards =  user.hand.cards.filter(card => card.insideArea(mouseDownX, mouseDownY))
-    possibleCards = possibleCards.concat(Discards.cards.filter(card => card.insideArea(mouseDownX, mouseDownY)))
-    for (let comb of Table.combs) {
-        possibleCards = possibleCards.concat(comb.cards.filter(card => card.insideArea(mouseDownX, mouseDownY)))
-    }
+    // Finds which element it was clicked on, with a priority
+    if (Deck.insideArea(mouseDownX, mouseDownY)){
+        clickedElement = Deck
 
-    if (possibleCards.length >= 1){
-        // Find the closest card (by x corner) to the click point
-        clickedCard = possibleCards[0]
-        let closest_dx = mouseDownX - (clickedCard.x - Card.w/2)
+    } else if (Discards.lastCard() != null && Discards.lastCard().insideArea(mouseDownX, mouseDownY)) {
+        clickedElement = Discards.lastCard()
 
-        for (let i = 1; i < possibleCards.length; i++) {
-            let card = possibleCards[i]
-            let dx = mouseDownX - (card.x - Card.w/2)
-            if (dx < closest_dx){
-                clickedCard = card
-                closest_dx = dx
+    } else if (Discards.insideArea(mouseDownX, mouseDownY)){
+        clickedElement = Discards
+
+    } else if (Table.combs.some((comb) => comb.insideArea(mouseDownX, mouseDownY))){ // Check if the was in some combination
+        for (let comb of Table.combs){
+            if (comb.insideArea(mouseDownX, mouseDownY)){
+                clickedElement = comb
+                break
             }
         }
+
+    } else if (Table.insideArea(mouseDownX, mouseDownY)){
+        clickedElement = Table
+
+    } else if (user.hand.cards.some((card) => card.insideArea(mouseDownX, mouseDownY))) {
+        // Filter all cards if click was inside it
+        let possibleCards =  user.hand.cards.filter((card) => card.insideArea(mouseDownX, mouseDownY))
+
+        clickedElement = possibleCards[0]
+
+        if (possibleCards.length > 1){
+            // Find the closest card (by x corner) to the click point
+            let closest_dx = mouseDownX - (clickedElement.x - Card.w/2)
+
+            for (let i = 1; i < possibleCards.length; i++) {
+                let card = possibleCards[i]
+                let dx = mouseDownX - (card.x - Card.w/2)
+                if (dx < closest_dx){
+                    clickedElement = card
+                    closest_dx = dx
+                }
+            }
+        }
+
+    } else {
+        clickedElement = null
     }
+
+    console.log(clickedElement)
 
     stateMachineUpdate()
 
-    if (clickedCard != null){        
-        if (clickedCard.grab.movable){
-            holdingCard = clickedCard
+    if (clickedElement instanceof Card){        
+        if (clickedElement.grab.movable){
+            holdingCard = clickedElement
             holdingCard.grab.holding = true
             holdingCard.grab.dx = mouseDownX - holdingCard.x
             holdingCard.grab.dy = mouseDownY - holdingCard.y
@@ -306,18 +325,18 @@ addEventListener('mouseup', (event) => {
     // 3 pixels square tolerance
     const notMoved = Math.abs(mouseDownX - mouseUpX) <= 3 && Math.abs(mouseDownY - mouseUpY) <= 3
 
-    if (clickedCard != null && user.hand.cards.includes(clickedCard) && notMoved && turn == user && phase != 'buy'){
+    if (clickedElement instanceof Card && user.hand.cards.includes(clickedElement) && notMoved && turn == user && phase != 'buy'){
         // Selected or unselected a card to compose the drop combination
-        if ((phase == 'fly' || phase == 'drop') && clickedCard == dropSelection[0]){
+        if ((phase == 'fly' || phase == 'drop') && clickedElement == dropSelection[0]){
             // Cant unselect the bought card on the fly
             console.log('fly case, dropSelection:')
             console.log(dropSelection)
             return
         } else {
-            if (dropSelection.includes(clickedCard)){
-                dropSelection.splice(dropSelection.indexOf(clickedCard), 1)
+            if (dropSelection.includes(clickedElement)){
+                dropSelection.splice(dropSelection.indexOf(clickedElement), 1)
             } else {
-                dropSelection.push(clickedCard)
+                dropSelection.push(clickedElement)
             }
             console.log('selected card, dropSelection:')
             console.log(dropSelection)
@@ -335,24 +354,71 @@ addEventListener('mousemove', (event) => {
 
     if (holdingCard != null) {
         holdingCard.newPos(mouseX - holdingCard.grab.dx, mouseY - holdingCard.grab.dy)
-    }
+    } 
 
-    const cond1 = turn == user && holdingCard == null && dropSelection.length >= 1
-    const cond2 = phase != 'buy'
+    // *** Arrumar regras de highlight, colocar highlight para compra do deck e do discards
+    
+    // const cond1 = turn == user && holdingCard == null
 
-    let insideAnyComb = false
-    for (let comb of Table.combs) {
-        if (comb.insideArea(mouseX, mouseY)){
-            insideAnyComb = true
-        }
-        comb.highlight = cond1 && cond2 && comb.insideArea(mouseX, mouseY)
-    }
-    if (insideAnyComb){
-        Table.frame = false
-    } else {
-        Table.frame = cond1 && cond2 && Table.insideArea(mouseX, mouseY)
-    }
-    Discards.frame = cond1 && cond2 && dropSelection.length == 1 && Discards.insideArea(mouseX, mouseY)
+    // Deck.highlight = cond1 && phase == 'buy' && Deck.insideArea(mouseX, mouseY)
+
+    // if (Discards.lastCard() != null){
+    //     Discards.lastCard().highlight = cond1 && ['buy', 'think'] && Discards.lastCard().insideArea(mouseX, mouseY)
+    // } 
+    
+    
+    // else if (Discards.insideArea(mouseDownX, mouseDownY)){
+    //     clickedElement = Discards
+
+    // } else if (Table.combs.some((comb) => comb.insideArea(mouseDownX, mouseDownY))){ // Check if the was in some combination
+    //     for (let comb of Table.combs){
+    //         if (comb.insideArea(mouseDownX, mouseDownY)){
+    //             clickedElement = comb
+    //             break
+    //         }
+    //     }
+
+    // } else if (Table.insideArea(mouseDownX, mouseDownY)){
+    //     clickedElement = Table
+
+    // } else if (user.hand.cards.some((card) => card.insideArea(mouseDownX, mouseDownY))) {
+    //     // Filter all cards if click was inside it
+    //     let possibleCards =  user.hand.cards.filter((card) => card.insideArea(mouseDownX, mouseDownY))
+
+    //     clickedElement = possibleCards[0]
+
+    //     if (possibleCards.length > 1){
+    //         // Find the closest card (by x corner) to the click point
+    //         let closest_dx = mouseDownX - (clickedElement.x - Card.w/2)
+
+    //         for (let i = 1; i < possibleCards.length; i++) {
+    //             let card = possibleCards[i]
+    //             let dx = mouseDownX - (card.x - Card.w/2)
+    //             if (dx < closest_dx){
+    //                 clickedElement = card
+    //                 closest_dx = dx
+    //             }
+    //         }
+    //     }
+
+    // } else {
+    //     clickedElement = null
+    // }
+    
+
+    // *** Antigas regras, funcionais
+
+    // const cond1 = turn == user && holdingCard == null && dropSelection.length >= 1
+    // const cond2 = phase != 'buy'
+
+    // if (Table.combs.some((comb) => comb.insideArea(mouseX, mouseY))){
+    //     let comb = Table.combs.filter((comb) => comb.insideArea(mouseX, mouseY))[0]
+    //     comb.highlight = cond1 && cond2 && comb.insideArea(mouseX, mouseY)
+    //     Table.frame = false
+    // } else {
+    //     Table.frame = cond1 && cond2 && Table.insideArea(mouseX, mouseY)
+    // }
+    // Discards.frame = cond1 && cond2 && dropSelection.length == 1 && Discards.insideArea(mouseX, mouseY)
     
     // // Spread cards when mouse is over
     // if (user.hand.insideArea(mouseX, mouseY)){
