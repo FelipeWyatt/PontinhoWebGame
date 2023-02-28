@@ -79,6 +79,14 @@ function randomPointInSquare(centerX, centerY, halfSide) {
     return { x, y }
 }
 
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
 
 //-----------------------------CLASSES------------------------------------
 const velocity = 0.1 // card movement velocity
@@ -292,7 +300,7 @@ export class Deck{
             card.grab.movable = false;
             card.newPos(Deck.x, Deck.y)
           });
-        // Deck.shuffle()
+        Deck.shuffle()
         Deck.highlight = false
     }
 
@@ -483,6 +491,8 @@ export class Hand extends Stack{
         const index = Math.floor(Math.random() * this.numberOfCards())
         return this.cards.splice(index, 1)[0]
     }
+
+    
    
     insideArea(x, y){
         let n = this.cards.length
@@ -551,7 +561,6 @@ export class Combination extends Hand {
 
     addToCombination(cards){
         let response = Table.checkCombination(this.cards.concat(cards))
-        console.log(response)
         if (response != false){
             // then cards is the cards array sorted
             this.cards = response[0] // [cards, type]
@@ -602,6 +611,30 @@ export class Table {
         Table.w = w
         Table.h = h
         Table.internalSpacing = internalSpacing
+    }
+
+    static sumCards(cards){
+        if (Array.isArray(cards) && cards.length > 0){
+            const valuesDict = {
+                "A": 15,
+                "2": 2,
+                "3": 3,
+                "4": 4,
+                "5": 5,
+                "6": 6,
+                "7": 7,
+                "8": 8,
+                "9": 9,
+                "10": 10,
+                "J": 10,
+                "Q": 10,
+                "K": 10,
+                "joker": 20};
+            
+            return cards.reduce((sum, card) => sum + valuesDict[card.value], 0);
+        }
+
+        return false
     }
 
     static checkCombination(cards, ending = false){
@@ -759,13 +792,31 @@ export class Table {
         if (response != false){
             let type = response[1]
             cards = response[0]
-            console.log(response)
             Table.combs.push(new Combination(cards, Table.x, Table.y, type))
             return true
         }
         return false
     }
 
+    static allSubsets(array, minLength = 3){
+        let subsets = []
+       
+        function recursion(subset, start){
+            for (let i = start; i < array.length; i++){
+                subset.push(array[i])
+                if (subset.length >= minLength){
+                    subsets.push(subset.slice()) // create a copy of the array
+                }
+                recursion(subset, i + 1)
+                subset.pop()
+            }
+        }
+        
+        recursion([], 0)
+        
+        return subsets
+    }
+    
     static insideArea(x, y){
         return Math.abs(Table.x - x) <= Table.w/2 && Math.abs(Table.y - y) <= Table.h/2
     }
@@ -942,12 +993,160 @@ class Player {
     update(){
         this.hand.update()
     }
+
+    // *** colocar esse metodo na classe bot
+    // checkForGame(){
+    //     let bestSeqs = []
+    //     let bestTrios = []
+
+    //     // Check seqs
+    //     for (let suit of shuffleArray(SUITS)){ // Check seqs, random suits so the game is not biased on one suit
+    //         let playableCards = this.hand.cards.filter((card) => card.suit == suit || card.value == "joker")
+    //         let possibleSeqs = Table.allSubsets(playableCards, 3)
+            
+    //         if (possibleSeqs.length > 0){
+    //             // filtra as combinacoes que nao sao possiveis
+    //             possibleSeqs = possibleSeqs.filter((set) => Table.checkCombination(set) != false) 
+                
+    //             if (possibleSeqs.length == 1){
+    //                 bestSeqs.push(possibleSeqs[0])
+            
+    //             } else if (possibleSeqs.length > 1){
+    //                 // Retorna a combinacao com maior soma
+    //                 bestSeqs.push(possibleSeqs.reduce((maxValue, seq) => Table.sumCards(maxValue) > Table.sumCards(seq) ? maxValue : seq))
+    //             }
+    //         }
+    //     }
+        
+    //     // Check trios
+    //     for (let value of shuffleArray(VALUES)){ // Check trios, random values so the game is not biased on one value trio
+    //         const playableCards = this.hand.cards.filter((card) => card.value == value && card.value != "joker")
+    //         if (playableCards.length >= 3){
+    //             let possibleTrios = Table.allSubsets(playableCards)
+    //             if (possibleTrios.length > 0){
+    //                 // filtra as combinacoes que nao sao possiveis
+    //                 possibleTrios = possibleTrios.filter((set) => Table.checkCombination(set) != false) 
+    //                 if (possibleTrios.length == 1){
+    //                     bestTrios.push(possibleTrios[0])
+                        
+    //                 } else if (possibleTrios.length > 1){
+    //                     // Retorna a combinacao com maior tamanho
+    //                     // *** para melhorar escolha um trio que nao tem carta que compoe sequencia
+    //                     bestTrios.push(possibleTrios.reduce((longer, trio) => longer.length > trio.length ? longer : trio))
+    //                 }
+                   
+                           
+    //             }
+    //         }
+    //     }
+
+        
+
+    //     const bestCombs = bestSeqs.concat(bestTrios)
+    //     if (bestCombs.length == 1) {
+    //         console.log('bestCombs ',bestCombs)
+    //         return bestCombs[0]
+    //     } else if (bestCombs.length > 1){
+    //         console.log('bestCombs ',bestCombs)
+    //         return bestCombs.reduce((maxValue, comb) => Table.sumCards(maxValue) > Table.sumCards(comb) ? maxValue : comb)
+    //     }
+
+    //     // Ideias para melhorar estratégia do bot
+    //     //  - Avaliar possibilidade de batida
+    //     //  - Se tiver joker, pensar em usar em outra sequencia                
+        
+    //     return false
+    // }
+
+
+    checkForGame(){
+        let bestCombs = []
+
+        // Check seqs
+        for (let suit of SUITS){ 
+            let playableCards = this.hand.cards.filter((card) => card.suit == suit || card.value == "joker")
+
+            if (playableCards.length >= 3){
+                let possibleSeqs = Table.allSubsets(playableCards, 3)
+
+                if (possibleSeqs.length > 0){
+                    // filtra as combinacoes que nao sao possiveis
+                    possibleSeqs = possibleSeqs.filter((set) => Table.checkCombination(set) != false) 
+                    
+                    if (possibleSeqs.length >= 1){
+                        bestCombs = bestCombs.concat(possibleSeqs.slice()) // a copy
+                    }
+                }
+            }
+        }
+
+
+        // Check trios
+        for (let value of VALUES){
+            let playableCards = this.hand.cards.filter((card) => card.value == value && card.value != "joker")
+
+            if (playableCards.length >= 3){
+                let possibleTrios = Table.allSubsets(playableCards, 3)
+                
+                if (possibleTrios.length > 0){
+                    // filtra as combinacoes que nao sao possiveis
+                    possibleTrios = possibleTrios.filter((set) => Table.checkCombination(set) != false) 
+
+                    if (possibleTrios.length >= 1){
+                        bestCombs = bestCombs.concat(possibleTrios.slice()) // a copy
+                    }      
+                }
+            }
+        }
+
+
+        if (bestCombs.length == 1){
+            return bestCombs[0]
+
+        } else if (bestCombs.length > 1){
+            // Retorna a combinacao com maior soma
+            return bestCombs.reduce((maxValue, seq) => Table.sumCards(maxValue) > Table.sumCards(seq) ? maxValue : seq)
+        }
+
+        // Ideias para melhorar estratégia do bot
+        //  - Avaliar possibilidade de batida
+        //  - Atualmente usa o joker em sequencias por que vale mais
+        //  - Se tiver joker, pensar em usar em outra sequencia                
+        
+        return false
+    }
+
+    checkTrios(){
+    // Check trios
+        for (let value of VALUES){
+            let playableCards = this.hand.cards.filter((card) => card.value == value && card.value != "joker")
+            if (playableCards.length >= 3){
+                let possibleTrios = Table.allSubsets(playableCards)
+                console.log(possibleTrios)
+                if (possibleTrios.length > 0){
+                    // filtra as combinacoes que nao sao possiveis
+                    possibleTrios = possibleTrios.filter((set) => Table.checkCombination(set) != false) 
+
+                    if (possibleTrios.length == 1){
+                        return possibleTrios[0]
+                    
+                    } else if (possibleTrios.length > 1){
+                        // Retorna a combinacao com maior tamanho
+                        // *** para melhorar escolha um trio que nao tem carta que compoe sequencia
+                        return possibleTrios.reduce((longer, trio) => longer.length > trio.length ? longer : trio)
+                    }      
+                }
+            }
+        }
+        return false
+    }
 }
 
 export class Bot extends Player {
     constructor(cards, x, y, orientation){
-        super(cards, x, y, orientation, false, false, Hand.defaultSpacing)
+        super(cards, x, y, orientation, true, false, Hand.defaultSpacing)
     }
+
 }
 
 export class User extends Player{

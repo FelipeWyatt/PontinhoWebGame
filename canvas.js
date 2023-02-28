@@ -47,9 +47,9 @@ function init(){
     // dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Drop', false)
     
     user = new User(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
-    const bot1 = new Bot(Deck.newHand(9), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
-    const bot2 = new Bot(Deck.newHand(9), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
-    const bot3 = new Bot(Deck.newHand(9), canvasWidthPct(97) - Card.h/2, canvasHeightPct(50), 'right')
+    const bot1 = new Bot(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
+    const bot2 = new Bot(Deck.newHand(), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
+    const bot3 = new Bot(Deck.newHand(), canvasWidthPct(97) - Card.h/2, canvasHeightPct(50), 'right')
     bots = [bot1, bot2, bot3]
 
     //                                           cancelButton, dropButton,
@@ -96,8 +96,18 @@ function stateMachineUpdate(){
                     // Invalid selection
                     dropSelection = dropSelection.slice(0, 1)
                 }
+
+            // user added cards to combination
+            } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
+                if (user.addToCombination(dropSelection, clickedElement)) {
+                    dropSelection = []
+                    phase = 'think'
+                } else {
+                    dropSelection = dropSelection.slice(0, 1)
+                }
+            
             // Click on discard pile to cancel the drop
-            } else if (dropSelection.length == 1 && clickedElement == Discards){
+            } else if (dropSelection.length == 1 && (clickedElement == Discards || clickedElement == Discards.lastCard())){
                 user.discardCard(dropSelection[0])
                 dropSelection = []
                 // Next turn
@@ -108,7 +118,7 @@ function stateMachineUpdate(){
         // Possible actions when in 'think' state
         } else if (phase == 'think'){
             // Discard a card and calls next user
-            if (dropSelection.length == 1 && dropSelection[0].value != "joker" && clickedElement == Discards){
+            if (dropSelection.length == 1 && dropSelection[0].value != "joker" && (clickedElement == Discards || clickedElement == Discards.lastCard())){
                 user.discardCard(dropSelection[0])
                 dropSelection = []
                 // Next turn
@@ -142,8 +152,18 @@ function stateMachineUpdate(){
                     dropSelection = dropSelection.slice(0, 1)
                 }
 
+            // user added cards to combination
+            } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
+                if (user.addToCombination(dropSelection, clickedElement)) {
+                    dropSelection = []
+                    phase = 'think'
+                    turn = lastTurn
+                } else {
+                    dropSelection = dropSelection.slice(0, 1)
+                }
+                
             // Selected drop area to cancel the fly
-            } else if (dropSelection.length == 1 && clickedElement == Discards){
+            } else if (dropSelection.length == 1 && (clickedElement == Discards || clickedElement == Discards.lastCard())){
                 user.discardCard(dropSelection[0])
                 dropSelection = []
                 phase = 'think'
@@ -159,27 +179,21 @@ function stateMachineUpdate(){
             turn = user
             dropSelection = [user.buyFromDiscards()]
         }
-    }        
+    }
+
+    if (user.hand.numberOfCards() == 0){
+        phase = 'win'
+        turn = user
+        for (let bot of bots) {
+            for (let card of bot.hand.cards){
+                card.flipped = true
+            }
+        }
+    }
 }
 
-function botPlayCheck(){
-    // called every botSlowness/60 seconds
-    if (turn == user) {
-        // *** Check if bot can buy on the fly, in order
-        return
-    } else {
-        if (phase == 'buy') {
-            turn.buyFromDeck();
-            phase = 'think'
-        } else if (phase == 'think') {
-            dropSelection = [turn.hand.chooseRandomCard()]
-            turn.discardCard(dropSelection[0])
-            dropSelection = []
-            turn = nextPlayer(turn)
-            phase = 'buy'
-        }
-    }  
-}
+
+
 
 // static endTurn() { // Finaliza o turno atual
 //     turn = nextuser(turn)
@@ -198,6 +212,46 @@ function nextPlayer(player){
     } else {
         return order[currentIndex + 1]
     }
+}
+
+
+
+function botPlay(){
+    // called every botSlowness/60 seconds
+    if (turn == user) {
+        // *** Check if bot can buy on the fly, in order
+        return
+    } else {
+        if (phase == 'buy') {
+            // *** ver se eh melhor comprar do lixo
+            turn.buyFromDeck()
+            phase = 'think'
+        } else if (phase == 'think') {
+            // Check if there is a game to drop
+            // *** ideia para melhorar eficiencia em vez de tratar dos objetos cards, 
+            //     tratar de objetos mais simples como {value, suit}
+
+            let response;
+            do{
+                response = turn.checkForGame();
+                console.log("response ", response);
+                if (response != false){
+                    turn.dropCombination(response);
+                }
+            } while (response != false);
+
+            
+
+            // *** ve se tem carta a adicionar em algum jogo
+
+            // *** para descartar carta, nao ser joker, nao ser colocada, mais alta
+            // *** Para melhorar descartar carta sem duble
+            turn.discardCard(turn.hand.chooseRandomCard())
+            
+            turn = nextPlayer(turn)
+            phase = 'buy'
+        }
+    }  
 }
 
 
@@ -238,7 +292,7 @@ function animate(){ // default FPS = 60
     htmlDisplayAttributes()
 
     if (++frameCount >= botSlowness){
-        botPlayCheck()
+        botPlay()
         frameCount = 0
     }
 }
@@ -252,6 +306,8 @@ addEventListener('mousedown', (event) => {
     const rect = canvas.getBoundingClientRect();
     mouseDownX = event.clientX - rect.left;
     mouseDownY = event.clientY - rect.top;
+
+    
 
     // Finds which element it was clicked on, with a priority
     if (Deck.insideArea(mouseDownX, mouseDownY)){
