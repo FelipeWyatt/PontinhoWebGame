@@ -24,7 +24,7 @@ let mouseDownX = 0
 let mouseDownY = 0
 let mouseUpX = 0
 let mouseUpY = 0
-const botSlowness = 120 // time for bot to play = botSlowness/60 [s] 
+const botSlowness = 2000 // time for bot to play = botSlowness/60 [s] 
 let frameCount = 0
 
 
@@ -72,6 +72,8 @@ function htmlDisplayAttributes() {
 function stateMachineUpdate(){
     // Called on mousedown event
     // States when is user's turn
+    let lastState = phase
+
     if (turn == user){
         // Possible actions when in 'buy' state
         if (phase == 'buy'){
@@ -79,6 +81,9 @@ function stateMachineUpdate(){
             if (Deck.numberOfCards() > 0 && clickedElement == Deck){
                 user.buyFromDeck()
                 phase = 'think' // Next state
+                
+                // Calls bot to play to check if buys on the fly
+                setTimeout(botPlay, Math.round(botSlowness/2))
             
             // user buys from discard pile
             } else if (Discards.buyable && clickedElement == Discards.lastCard()){
@@ -92,10 +97,13 @@ function stateMachineUpdate(){
                 if (user.dropCombination(dropSelection)) {
                     dropSelection = []
                     phase = 'think'
+
+                    checkWin()
                 } else {
                     // Invalid selection
                     dropSelection = dropSelection.slice(0, 1)
                 }
+                
 
             // user added cards to combination
             } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
@@ -105,6 +113,8 @@ function stateMachineUpdate(){
                 } else {
                     dropSelection = dropSelection.slice(0, 1)
                 }
+
+                checkWin()
             
             // Click on discard pile to cancel the drop
             } else if (dropSelection.length == 1 && (clickedElement == Discards || clickedElement == Discards.lastCard())){
@@ -113,7 +123,13 @@ function stateMachineUpdate(){
                 // Next turn
                 turn = nextPlayer(turn)
                 phase = 'buy'
+                
+                checkWin()  
+
+                // Calls bot to play
+                setTimeout(botPlay, botSlowness)
             }
+
         
         // Possible actions when in 'think' state
         } else if (phase == 'think'){
@@ -125,16 +141,26 @@ function stateMachineUpdate(){
                 turn = nextPlayer(turn)
                 phase = 'buy'  
                 
-                // user added cards to combination
+                checkWin()
+
+                // Calls bot to play
+                setTimeout(botPlay, botSlowness)
+                
+            // user added cards to combination
             } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
                 user.addToCombination(dropSelection, clickedElement)
                 dropSelection = []
+
+                checkWin()
                 
             // user dropped a combination
             } else if (dropSelection.length >= 3 && clickedElement == Table){
                 user.dropCombination(dropSelection)
                 dropSelection = []
+
+                checkWin()
                 
+            // user tried to discard invalid card
             } else if ((dropSelection.length > 1 || (dropSelection.length == 1 && dropSelection[0].value == "joker")) && clickedElement == Discards){
                 // *** Adicionar warning se tentar jogar joker ou mais de uma carta
                 console.log('Nao pode jogar essa selecao de cartas')
@@ -148,6 +174,11 @@ function stateMachineUpdate(){
                     dropSelection = []
                     phase = 'think'
                     turn = lastTurn
+
+                    checkWin()
+                    
+                    // Calls bot to play
+                    setTimeout(botPlay, botSlowness)
                 } else {
                     dropSelection = dropSelection.slice(0, 1)
                 }
@@ -158,6 +189,11 @@ function stateMachineUpdate(){
                     dropSelection = []
                     phase = 'think'
                     turn = lastTurn
+
+                    checkWin()
+
+                    // Calls bot to play
+                    setTimeout(botPlay, botSlowness)
                 } else {
                     dropSelection = dropSelection.slice(0, 1)
                 }
@@ -168,6 +204,9 @@ function stateMachineUpdate(){
                 dropSelection = []
                 phase = 'think'
                 turn = lastTurn
+
+                // Calls bot to play
+                setTimeout(botPlay, botSlowness)
             }
         }
 
@@ -181,28 +220,8 @@ function stateMachineUpdate(){
         }
     }
 
-    if (user.hand.numberOfCards() == 0){
-        phase = 'win'
-        turn = user
-        for (let bot of bots) {
-            for (let card of bot.hand.cards){
-                card.flipped = true
-            }
-        }
-    }
 }
 
-
-
-
-// static endTurn() { // Finaliza o turno atual
-//     turn = nextuser(turn)
-//     phase = 'buy'
-//     if (bots.includes(turn)) {
-//         // O bot joga
-//         botPlay()
-//     }
-// }
 
 function nextPlayer(player){
     const currentIndex = order.indexOf(player)
@@ -214,18 +233,34 @@ function nextPlayer(player){
     }
 }
 
+function checkWin(){
+    for (let player of [user, ...bots]){
+        if (player.hand.numberOfCards() == 0){
+            phase = 'win'
+            turn = player
+            for (let player_ of [user, ...bots]) {
+                for (let card of player_.hand.cards){
+                    card.flipped = true
+                }
+            }
+            return true
+        }
+    }
+    return false
+}
+
 
 
 function botPlay(){
-    // called every botSlowness/60 seconds
-    if (turn == user) {
-        // *** Check if bot can buy on the fly, in order
-        return
-    } else {
+    // called when an important state changes
+    if (turn != user) {
         if (phase == 'buy') {
-            // *** ver se eh melhor comprar do lixo
-            turn.buyFromDeck()
+            turn.chooseBuy()
             phase = 'think'
+
+            // Calls bot to play
+            setTimeout(botPlay, botSlowness)
+
         } else if (phase == 'think') {
             // Check if there is a game to drop
             // *** ideia para melhorar eficiencia em vez de tratar dos objetos cards, 
@@ -233,25 +268,43 @@ function botPlay(){
 
             let response;
             do{
-                response = turn.checkForGame();
+                response = turn.checkForGame(turn.hand.cards);
                 console.log("response ", response);
                 if (response != false){
                     turn.dropCombination(response);
                 }
             } while (response != false);
 
-            
+            // Adiciona cards até nao ter nenhum para adicionar a combinacao
+            let added;
+            do {
+                added = turn.checkForAddition();
+            } while (added);
 
-            // *** ve se tem carta a adicionar em algum jogo
+            if (turn.hand.cards.length > 0){
+                turn.discardCard(turn.chooseDiscardCard())
+            }
 
-            // *** para descartar carta, nao ser joker, nao ser colocada, mais alta
-            // *** Para melhorar descartar carta sem duble
-            turn.discardCard(turn.hand.chooseRandomCard())
+            checkWin()
             
             turn = nextPlayer(turn)
             phase = 'buy'
+
+            if (bots.includes(turn)){
+                // Calls bot to play
+                setTimeout(botPlay, botSlowness)
+            }
         }
-    }  
+    } else {
+        // *** Check if bots can buy on the fly, in order
+        // checkWin()
+        // if (bots.includes(turn)){
+        //     // Calls bot to play
+        //     setTimeout(botPlay, botSlowness)
+        // }
+        ;
+    }
+
 }
 
 
@@ -291,10 +344,10 @@ function animate(){ // default FPS = 60
 
     htmlDisplayAttributes()
 
-    if (++frameCount >= botSlowness){
-        botPlay()
-        frameCount = 0
-    }
+    // if (++frameCount >= botSlowness){
+    //     botPlay()
+    //     frameCount = 0
+    // }
 }
 
 
