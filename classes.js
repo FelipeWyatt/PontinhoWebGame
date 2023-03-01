@@ -1,4 +1,7 @@
 //---------------------------CANVAS SETUP---------------------------------
+// c.scale(1.5, 1.5) // zoom in canvas draws 
+// Ideia, para ocupar o máximo da tela dar scale a partir de um fator do window.innerHeight
+// igual ao funcionamento do colonist.io
 export const canvas = document.querySelector('canvas')
 
 canvas.height = 600 //window.innerHeight;

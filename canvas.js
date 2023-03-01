@@ -2,24 +2,11 @@
 import {Card, Deck, Discards, Table, Button, User, Bot, Combination} from './classes.js';
 import {canvas, c} from './classes.js';
 import {canvasHeightPct, canvasWidthPct} from './classes.js';
-// import ace from './img/png/1x/spade_1.png'
-// const ace = new Image() // Create new img element
-// ace.src = "./img/png/1x/spade_1.png" // Set source path
-// to draw the image
-// c.drawImage(ace, 0, 0, ace.width, ace.height, this.x , this.y, Card.w, Card.h)
 
-            
-
-//---------------------------CANVAS SETUP---------------------------------
-// c.scale(1.5, 1.5) // zoom in canvas draws 
-// Ideia, para ocupar o máximo da tela dar scale a partir de um fator do window.innerHeight
-// igual ao funcionamento do colonist.io
-
+//-----------------------------GLOBAL VARIABLES--------------------------
 let clickedElement = null
 let holdingCard = null
 let dropSelection = []
-let mouseX = 0
-let mouseY = 0
 let mouseDownX = 0
 let mouseDownY = 0
 let mouseUpX = 0
@@ -454,8 +441,8 @@ addEventListener('mouseup', (event) => {
 
 addEventListener('mousemove', (event) => {
     const rect = canvas.getBoundingClientRect()
-    mouseX = event.clientX - rect.left
-    mouseY = event.clientY - rect.top
+    let mouseX = event.clientX - rect.left
+    let mouseY = event.clientY - rect.top
 
     if (holdingCard != null) {
         holdingCard.newPos(mouseX - holdingCard.grab.dx, mouseY - holdingCard.grab.dy)
