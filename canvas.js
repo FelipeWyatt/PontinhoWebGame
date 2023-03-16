@@ -22,6 +22,45 @@ let turn
 let lastTurn
 let state
 
+
+//---------------------------FSM (Final State Machine)---------------------
+
+class State {
+    constructor(name, possibleStatesNames){
+        this.name = name;
+        this.possibleStatesNames = possibleStatesNames;
+        this.handler = () => {return this};
+    }
+
+    setHandlerFunction(func){
+        this.handler = func;
+    }
+}
+
+class FSM {
+    constructor(){
+        this.statesList = [];
+        this.state = null;
+        this.lastState = null;
+    }
+
+    addState(newState){
+        this.statesList.push(newState);
+    }
+
+    init(initialState){
+        this.state = initialState;
+        this.lastState = this.state;
+    }
+
+    runMachine(action){
+        this.lastState = this.state;
+        this.state = this.state.handler(action);
+    }
+}
+
+
+
 //---------------------------------STATES----------------------------------
 const BUY = 'buy'
 const DROP = 'drop'
