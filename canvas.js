@@ -4,16 +4,15 @@ import {canvas, c} from './classes.js';
 import {canvasHeightPct, canvasWidthPct} from './classes.js';
 
 //-----------------------------GLOBAL VARIABLES--------------------------
+const gameSlowness = 2000 // time of bot plays and waiting for fly in ms
+
 let clickedElement = null
 let holdingCard = null
 let dropSelection = []
+let lockedCard = null // *** trocar dropSelection[0] check por locked card
+let movesTrace = []
 let mouseDownX = 0
 let mouseDownY = 0
-let mouseUpX = 0
-let mouseUpY = 0
-const botSlowness = 2000 // time for bot to play = botSlowness/60 [s] 
-let frameCount = 0
-
 
 let user
 let bots
@@ -21,8 +20,17 @@ let elements
 let order
 let turn
 let lastTurn
-let phase // buy -> think
-            //      fly <->  (phase that can happen on the think phase)
+let state
+
+//---------------------------------STATES----------------------------------
+const BUY = 'buy'
+const DROP = 'drop'
+const WAIT = 'wait'
+const THINK = 'think'
+const FLY = 'fly'
+const JOKER = 'joker'
+const ENDING = 'ending'
+const WIN = 'win'
 
 function init(){
     // Begin round
@@ -31,7 +39,7 @@ function init(){
     Table.init(canvasWidthPct(50), canvasHeightPct(66.67), canvasWidthPct(66.67), canvasHeightPct(36.67))
     
     // cancelButton = new Button(canvasWidthPct(8), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Cancel', false)
-    // dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Drop', false)
+    // dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), DROP, false)
     
     user = new User(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
     const bot1 = new Bot(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
@@ -44,7 +52,7 @@ function init(){
 
     order = [user, bot2, bot1, bot3] // sentido horário
     turn = order[0]
-    phase = 'buy'
+    state = BUY
 }
 
 function htmlDisplayAttributes() {
@@ -52,43 +60,44 @@ function htmlDisplayAttributes() {
     document.getElementById("deck").innerHTML = Deck.numberOfCards()
     document.getElementById("discardPile").innerHTML = Discards.numberOfCards()
     document.getElementById("turn").innerHTML = turn.orientation
-    document.getElementById("phase").innerHTML = phase
+    document.getElementById("state").innerHTML = state
 }
     
 
-function stateMachineUpdate(){
+function runStateMachine(){
     // Called on mousedown event
     // States when is user's turn
-    let lastState = phase
 
     if (turn == user){
-        // Possible actions when in 'buy' state
-        if (phase == 'buy'){
+        // Possible actions when in BUY state
+        if (state == BUY){
             // user buys from deck
             if (Deck.numberOfCards() > 0 && clickedElement == Deck){
                 user.buyFromDeck()
-                phase = 'think' // Next state
+                state = WAIT // Next state
                 
                 // Calls bot to play to check if buys on the fly
-                setTimeout(botPlay, Math.round(botSlowness/2))
+                setTimeout(botPlay, 200) // Needs to be fast, so user don't click make another action
             
             // user buys from discard pile
             } else if (Discards.buyable && clickedElement == Discards.lastCard()){
-                dropSelection = [user.buyFromDiscards()]
-                phase = 'drop'
+                lockedCard = user.buyFromDiscards()
+                dropSelection = [lockedCard]
+                state = DROP
             }
 
-        // Possible actions when in 'drop' state
-        } else if (phase == 'drop'){
+        // Possible actions when in DROP state
+        } else if (state == DROP){
             if (clickedElement == Table){
                 if (user.dropCombination(dropSelection)) {
                     dropSelection = []
-                    phase = 'think'
+                    lockedCard = null
+                    state = THINK
 
                     checkWin()
                 } else {
                     // Invalid selection
-                    dropSelection = dropSelection.slice(0, 1)
+                    dropSelection = [lockedCard]
                 }
                 
 
@@ -96,42 +105,44 @@ function stateMachineUpdate(){
             } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
                 if (user.addToCombination(dropSelection, clickedElement)) {
                     dropSelection = []
-                    phase = 'think'
+                    lockedCard = null
+                    state = THINK
                 } else {
-                    dropSelection = dropSelection.slice(0, 1)
+                    dropSelection = [lockedCard]
                 }
 
                 checkWin()
             
             // Click on discard pile to cancel the drop
             } else if (dropSelection.length == 1 && (clickedElement == Discards || clickedElement == Discards.lastCard())){
-                user.discardCard(dropSelection[0])
+                user.discardCard(lockedCard)
                 dropSelection = []
+                lockedCard = null
                 // Next turn
                 turn = nextPlayer(turn)
-                phase = 'buy'
+                state = BUY
                 
                 checkWin()  
 
                 // Calls bot to play
-                setTimeout(botPlay, botSlowness)
+                setTimeout(botPlay, gameSlowness)
             }
 
         
-        // Possible actions when in 'think' state
-        } else if (phase == 'think'){
+        // Possible actions when in THINK state
+        } else if (state == THINK){
             // Discard a card and calls next user
             if (dropSelection.length == 1 && dropSelection[0].value != "joker" && (clickedElement == Discards || clickedElement == Discards.lastCard())){
                 user.discardCard(dropSelection[0])
                 dropSelection = []
                 // Next turn
                 turn = nextPlayer(turn)
-                phase = 'buy'  
+                state = BUY  
                 
                 checkWin()
 
                 // Calls bot to play
-                setTimeout(botPlay, botSlowness)
+                setTimeout(botPlay, gameSlowness)
                 
             // user added cards to combination
             } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
@@ -154,56 +165,60 @@ function stateMachineUpdate(){
                 dropSelection = []
             }
 
-        } else if (phase == 'fly') {
+        } else if (state == FLY) {
             // Selected drop area to drop currently combination on the fly
             if (dropSelection.length >= 3 && clickedElement == Table){
                 if (user.dropCombination(dropSelection)) {
                     dropSelection = []
-                    phase = 'think'
+                    lockedCard = null
+                    state = THINK
                     turn = lastTurn
 
                     checkWin()
                     
                     // Calls bot to play
-                    setTimeout(botPlay, botSlowness)
+                    setTimeout(botPlay, gameSlowness)
                 } else {
-                    dropSelection = dropSelection.slice(0, 1)
+                    dropSelection = [lockedCard]
                 }
 
             // user added cards to combination
             } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
                 if (user.addToCombination(dropSelection, clickedElement)) {
                     dropSelection = []
-                    phase = 'think'
+                    lockedCard = null
+                    state = THINK
                     turn = lastTurn
 
                     checkWin()
 
                     // Calls bot to play
-                    setTimeout(botPlay, botSlowness)
+                    setTimeout(botPlay, gameSlowness)
                 } else {
-                    dropSelection = dropSelection.slice(0, 1)
+                    dropSelection = [lockedCard]
                 }
                 
             // Selected drop area to cancel the fly
             } else if (dropSelection.length == 1 && (clickedElement == Discards || clickedElement == Discards.lastCard())){
-                user.discardCard(dropSelection[0])
+                user.discardCard(lockedCard)
                 dropSelection = []
-                phase = 'think'
+                lockedCard = null
+                state = THINK
                 turn = lastTurn
 
                 // Calls bot to play
-                setTimeout(botPlay, botSlowness)
+                setTimeout(botPlay, gameSlowness)
             }
         }
 
     } else { // Not user turn
         // Selected discardPile to buy on the fly
-        if (turn != nextPlayer(user) && phase == 'think' && Discards.buyable && clickedElement == Discards.lastCard()){
+        if (turn != nextPlayer(user) && state == WAIT && Discards.buyable && clickedElement == Discards.lastCard()){
             lastTurn = turn
-            phase = 'fly'
+            state = FLY
             turn = user
-            dropSelection = [user.buyFromDiscards()]
+            lockedCard = user.buyFromDiscards()
+            dropSelection = [lockedCard]
         }
     }
 
@@ -220,10 +235,20 @@ function nextPlayer(player){
     }
 }
 
+function previousPlayer(player){
+    const currentIndex = order.indexOf(player)
+    // define o próximo jogador pela ordem
+    if (currentIndex == 0) {
+        return order[order.length - 1]
+    } else {
+        return order[currentIndex - 1]
+    }
+}
+
 function checkWin(){
     for (let player of [user, ...bots]){
         if (player.hand.numberOfCards() == 0){
-            phase = 'win'
+            state = WIN
             turn = player
             for (let player_ of [user, ...bots]) {
                 for (let card of player_.hand.cards){
@@ -241,22 +266,29 @@ function checkWin(){
 function botPlay(){
     // called when an important state changes
     if (turn != user) {
-        if (phase == 'buy') {
-            turn.chooseBuy()
-            phase = 'think'
+        if (state == BUY) {
+            let choice = turn.chooseBuy()
 
-            // Calls bot to play
-            setTimeout(botPlay, botSlowness)
+            if (choice == 'Deck'){
+                state = WAIT
 
-        } else if (phase == 'think') {
+                // Calls bot to play
+                setTimeout(botPlay, 200)
+            } else {
+                state = DROP
+            }
+
+
+        } else if (state == THINK) {
             // Check if there is a game to drop
             // *** ideia para melhorar eficiencia em vez de tratar dos objetos cards, 
             //     tratar de objetos mais simples como {value, suit}
 
+            // First tries to drop combinations
             let response;
             do{
                 response = turn.checkForGame(turn.hand.cards);
-                console.log("response ", response);
+                
                 if (response != false){
                     turn.dropCombination(response);
                 }
@@ -275,46 +307,115 @@ function botPlay(){
             checkWin()
             
             turn = nextPlayer(turn)
-            phase = 'buy'
+            state = BUY
 
             if (bots.includes(turn)){
                 // Calls bot to play
-                setTimeout(botPlay, botSlowness)
+                setTimeout(botPlay, Math.round(gameSlowness/2))
             }
+
+        } else if (state == FLY) {
+            // *** em vez de checar da melhor comb, checa se é possivel usar a lokced card em alguma
+            let hipotheticalBestComb = turn.checkForGame([...turn.hand.cards, lockedCard])
+
+            if (hipotheticalBestComb != false && hipotheticalBestComb.includes(lockedCard)){
+                turn.dropCombination(hipotheticalBestComb);
+                checkWin()
+            } else {
+                turn.discardCard(lockedCard)
+            }
+            
+            turn = lastTurn
+            state = THINK
+            lockedCard = null
+            
+            // Call bot to play
+            if (bots.includes(turn)){
+                setTimeout(botPlay, gameSlowness)
+            }
+
         }
-    } else {
-        // *** Check if bots can buy on the fly, in order
-        // checkWin()
-        // if (bots.includes(turn)){
-        //     // Calls bot to play
-        //     setTimeout(botPlay, botSlowness)
-        // }
-        ;
+
+    }
+
+    if (state == WAIT){
+        for (let bot = nextPlayer(turn); bot != previousPlayer(turn); bot = nextPlayer(bot)){
+            console.log(bot)
+        }
+        if (Discards.buyable){
+            // Check if bots can buy on the fly, in order
+            // *** Adicionar feature que quem vai bater com a carta tem prioridade
+
+            if (turn == user || turn == nextPlayer(user) || turn == nextPlayer(nextPlayer(user))){
+                // Casos em que o player não pode comprar o descarte ou é o último em prioridade
+                // Checa rapidamente se os bots querem comprar e muda o estado
+                for (let bot = nextPlayer(turn); bot != previousPlayer(turn); bot = nextPlayer(bot)){
+                    // *** em vez de checar da melhor comb, checa se é possivel usar a locked card em alguma
+                    let hipotheticalBestComb = bot.checkForGame([...bot.hand.cards, Discards.lastCard()])
+
+                    // Compra do descarte se a melhor combinacao é feita com a carta do descarte
+                    if (hipotheticalBestComb != false && hipotheticalBestComb.includes(Discards.lastCard())){
+                        lastTurn = turn
+                        state = FLY
+                        turn = bot
+                        lockedCard = bot.buyFromDiscards()
+                        setTimeout(botPlay, Math.round(gameSlowness/2))
+                        return
+                    }
+                }
+
+                // Nenhum bot quer a carta
+                state = THINK
+            } else {
+                // Checa rapidamente os bots com preferência a comprar, espera 2*gameSlowness, checa se o user não comprou
+                // e então checa o resto dos bots e muda o estado
+                for (let bot = nextPlayer(turn); bot != user; bot = nextPlayer(bot)){
+                    // *** em vez de checar da melhor comb, checa se é possivel usar a locked card em alguma
+                    let hipotheticalBestComb = bot.checkForGame([...bot.hand.cards, Discards.lastCard()])
+
+                    // Compra do descarte se a melhor combinacao é feita com a carta do descarte
+                    if (hipotheticalBestComb != false && hipotheticalBestComb.includes(Discards.lastCard())){
+                        lastTurn = turn
+                        state = FLY
+                        turn = bot
+                        lockedCard = bot.buyFromDiscards()
+                        setTimeout(botPlay, Math.round(gameSlowness/2))
+                        return // return importante para evitar o check do player
+                    }
+                }
+
+                setTimeout(() => {
+                    if (turn != user && state == WAIT && Discards.buyable){
+                        for (let bot = nextPlayer(user); bot != previousPlayer(turn); bot = nextPlayer(bot)){
+                            // *** em vez de checar da melhor comb, checa se é possivel usar a locked card em alguma
+                            let hipotheticalBestComb = bot.checkForGame([...bot.hand.cards, Discards.lastCard()])
+        
+                            // Compra do descarte se a melhor combinacao é feita com a carta do descarte
+                            if (hipotheticalBestComb != false && hipotheticalBestComb.includes(Discards.lastCard())){
+                                lastTurn = turn
+                                state = FLY
+                                turn = bot
+                                lockedCard = bot.buyFromDiscards()
+                                setTimeout(botPlay, Math.round(gameSlowness/2))
+                                return // return importante para evitar o check do player
+                            }
+                        }
+                        // Nenhum bot quer a carta
+                        state = THINK
+                    }
+                }, Math.round(gameSlowness*1.5))
+            }
+        } else {
+            state = THINK
+        }
     }
 
 }
 
-
-// static botPlay(){
-//     if (phase == 'buy'){
-//         setTimeout(function() { 
-//             turnBuyFromDeck();
-//             // If someone buys on the fly, waits to discard a card
-//             const checkPhase = setInterval(function() {
-//                 if (phase != 'fly') {
-//                   clearInterval(checkPhase);
-//                   turnDiscardCard(turn.hand.chooseRandomCard())
-//                 }
-//               }, 3000); // sets the bot play speed
-//         }, 1000);
-//     }        
-// }
-
-
-
   
 
 //---------------------------------MAIN------------------------------
+
 function animate(){ // default FPS = 60
     // setup block
     requestAnimationFrame(animate)
@@ -328,13 +429,8 @@ function animate(){ // default FPS = 60
         holdingCard.update()
     }
 
-
     htmlDisplayAttributes()
 
-    // if (++frameCount >= botSlowness){
-    //     botPlay()
-    //     frameCount = 0
-    // }
 }
 
 
@@ -346,8 +442,6 @@ addEventListener('mousedown', (event) => {
     const rect = canvas.getBoundingClientRect();
     mouseDownX = event.clientX - rect.left;
     mouseDownY = event.clientY - rect.top;
-
-    
 
     // Finds which element it was clicked on, with a priority
     if (Deck.insideArea(mouseDownX, mouseDownY)){
@@ -394,26 +488,22 @@ addEventListener('mousedown', (event) => {
         clickedElement = null
     }
 
-    stateMachineUpdate()
-
     if (clickedElement instanceof Card){        
         if (clickedElement.grab.movable){
             holdingCard = clickedElement
             holdingCard.grab.holding = true
             holdingCard.grab.dx = mouseDownX - holdingCard.x
             holdingCard.grab.dy = mouseDownY - holdingCard.y
-            return
         }
     }
+
+    runStateMachine()
 })
 
 addEventListener('mouseup', (event) => {
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-
-    mouseUpX = x
-    mouseUpY = y
+    let mouseUpX = event.clientX - rect.left;
+    let mouseUpY = event.clientY - rect.top;
 
     if (holdingCard != null){
         holdingCard.grab.holding = false
@@ -423,18 +513,16 @@ addEventListener('mouseup', (event) => {
     // 3 pixels square tolerance
     const notMoved = Math.abs(mouseDownX - mouseUpX) <= 3 && Math.abs(mouseDownY - mouseUpY) <= 3
 
-    if (clickedElement instanceof Card && user.hand.cards.includes(clickedElement) && notMoved && turn == user && phase != 'buy'){
+    if (clickedElement instanceof Card && user.hand.cards.includes(clickedElement) && notMoved && turn == user && state != BUY){
         // Selected or unselected a card to compose the drop combination
         // Cant unselect the bought card on the fly
-        if (clickedElement != dropSelection[0] || (phase != 'fly' && phase != 'drop')) {
+        if (lockedCard == null || clickedElement != lockedCard) {
             if (dropSelection.includes(clickedElement)){
                 dropSelection.splice(dropSelection.indexOf(clickedElement), 1)
             } else {
                 dropSelection.push(clickedElement)
             }
-            return
         }
-        
     }
 
 })
@@ -450,19 +538,19 @@ addEventListener('mousemove', (event) => {
 
     const cond1 = turn == user && holdingCard == null
 
-    Deck.highlight = cond1 && phase == 'buy' && Deck.insideArea(mouseX, mouseY)
+    Deck.highlight = cond1 && state == BUY && Deck.insideArea(mouseX, mouseY)
 
     if (Discards.lastCard() != null){
-        Discards.lastCard().highlight = Discards.lastCard().insideArea(mouseX, mouseY) && holdingCard == null && ((phase == 'buy' && turn == user) || (phase == 'think' && turn != user && turn != nextPlayer(user))) 
+        Discards.lastCard().highlight = Discards.lastCard().insideArea(mouseX, mouseY) && holdingCard == null && ((state == BUY && turn == user) || (state == THINK && turn != user && turn != nextPlayer(user))) 
     } 
     
-    Discards.frame = Discards.insideArea(mouseX, mouseY) && cond1 && dropSelection.length == 1 && phase != 'buy'
+    Discards.frame = Discards.insideArea(mouseX, mouseY) && cond1 && dropSelection.length == 1 && state != BUY
     
     for (let comb of Table.combs){
-        comb.highlight = dropSelection.length >= 1 && comb.insideArea(mouseX, mouseY) && cond1 && phase != 'buy'
+        comb.highlight = dropSelection.length >= 1 && comb.insideArea(mouseX, mouseY) && cond1 && state != BUY
     }
 
-    Table.frame = cond1 && phase != 'buy' && dropSelection.length >= 3 && Table.insideArea(mouseX, mouseY) && !Table.combs.some((comb) => comb.insideArea(mouseX, mouseY))
+    Table.frame = cond1 && state != BUY && dropSelection.length >= 3 && Table.insideArea(mouseX, mouseY) && !Table.combs.some((comb) => comb.insideArea(mouseX, mouseY))
 
     // // Spread cards when mouse is over
     // if (user.hand.insideArea(mouseX, mouseY)){

@@ -765,8 +765,6 @@ export class Table {
                         descontinuitys += VALUES.indexOf(cards[i].value) - 1 - VALUES.indexOf(cards[i-1].value)
                     }
                 }
-
-                console.log("inserindo jokers:", descontinuitySize, descontinuitys, jokers)
                 
                 for (let i in descontinuitySize){
                     for (let j = 0; j < descontinuitySize[i]; j++){
@@ -980,7 +978,7 @@ class Player {
             for (let card of cards) {
                 this.hand.remove(card)
             }
-            console.log('combinacao adicionada okay')
+            
             return true
         } else {
             // ***Adicionar pop-up (?) de aviso
@@ -998,7 +996,7 @@ class Player {
             for (let card of cards) {
                 this.hand.remove(card)
             }
-            console.log('combinacao adicionada okay')
+            
             return true
         } else {
             // ***Adicionar pop-up (?) de aviso
@@ -1089,10 +1087,12 @@ export class Bot extends Player {
             this.buyFromDiscards()
             // Ja baixa combinacao para nao ser necessario entrar no estado 'drop'
             this.dropCombination(hipotheticalBestComb)
+
+            return 'Discards'
         } else {
             this.buyFromDeck()
+            return 'Deck'
         }
-        return true
     }
 
     checkForAddition(){
