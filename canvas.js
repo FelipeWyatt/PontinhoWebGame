@@ -26,26 +26,77 @@ let state
 //---------------------------FSM (Final State Machine)---------------------
 
 class State {
-    constructor(name, possibleStatesNames){
+    constructor(name){
         this.name = name;
-        this.possibleStatesNames = possibleStatesNames;
+        this.connections = [];
         this.handler = () => {return this};
+    }
+
+    setConnections(listPossibleStates){
+        this.connections = listPossibleStates;
     }
 
     setHandlerFunction(func){
         this.handler = func;
     }
+
+    toString(){
+		let msg = this.name + " -> (";
+
+        for (let state of this.connections){
+            msg += state.name + ", ";
+        }
+		
+		msg = msg.slice(0, msg.length-2) + ")";
+        return msg;
+    }
 }
 
+class LockedCardState extends State {
+	constructor(name){
+		super(name);
+		this.lockedCard = null;
+	}
+}
+
+class TraceableState extends State {
+	constructor(name){
+		super(name);
+		this.movements = [];
+	}
+	
+	addMovement(card, fromObj, toObj){
+		this.movements.push({'obj':card, 'from':fromObj, 'to':toObj});
+	}
+	
+	clearMovements(){
+		this.movements = [];
+	}
+	
+	undoMovements(){
+		for (let i = this.movements.length - 1; i >= 0; i--){
+			let card = this.movements[i]['card'];
+			let fromObj = this.movements[i]['from'];
+			let toObj = this.movements[i]['to'];
+			
+			// Para cada tipo de objeto, adicionar de forma diferente
+			toObj.remove(card);
+			toObj.update();
+			fromObj.add(card);
+			fromObj.update();
+		}
+		return true;
+	}
+}
+
+//----------------------FSM (Finite State Machine)-----------------
 class FSM {
-    constructor(){
-        this.statesList = [];
+    // Finite State Machine
+    constructor(name, statesList){
+        this.name = name;
+        this.statesList = statesList;
         this.state = null;
         this.lastState = null;
-    }
-
-    addState(newState){
-        this.statesList.push(newState);
     }
 
     init(initialState){
@@ -53,23 +104,78 @@ class FSM {
         this.lastState = this.state;
     }
 
-    runMachine(action){
-        this.lastState = this.state;
-        this.state = this.state.handler(action);
+    run(action){
+        const newState = this.state.handler(action);
+		if (newState != this.state){
+			this.lastState = this.state;
+			this.state = newState;
+		}
+    }
+
+    toString(){
+        let msg = this.name + " FSM:\n+ State: " + this.state.name + "\n";
+		msg += "+ Last state: " + this.lastState.name + "\n";
+		
+		msg += "+ Flow graph:\n";
+
+        for (let state of this.statesList){
+            msg += "\t" + state.toString() + "\n";
+        }
+        
+        return msg;
     }
 }
 
 
-
 //---------------------------------STATES----------------------------------
-const BUY = 'buy'
-const DROP = 'drop'
-const WAIT = 'wait'
-const THINK = 'think'
-const FLY = 'fly'
-const JOKER = 'joker'
-const ENDING = 'ending'
-const WIN = 'win'
+const BUY = new State('buy');
+const DROP = new State('drop');
+const WAIT = new State('wait');
+const THINK = new State('think');
+const FLY = new State('fly');
+const JOKER = new State('joker');
+const ENDING = new State('ending');
+const WIN = new State('win');
+
+BUY.setConnections([THINK, DROP]);
+BUY.setHandlerFunction((clickedElement) => {
+  if (clickedElement == 1){
+    return THINK;
+  } else if (clickedElement == 2){
+      return DROP;
+  }
+  return BUY;
+});
+
+THINK.setConnections([BUY])
+THINK.setHandlerFunction((clickedElement) => {
+  if (clickedElement == 3){
+    return BUY;
+  }
+  return THINK;
+});
+
+DROP.setConnections([BUY])
+DROP.setHandlerFunction((clickedElement) => {
+  if (clickedElement == 1){
+    return BUY;
+  }
+  return DROP;
+});
+
+
+
+phaseMachine = new FSM('Phase', [BUY, THINK, DROP]);
+phaseMachine.init(BUY);
+console.log(phaseMachine.toString());
+
+phaseMachine.run(1);
+console.log(phaseMachine.toString());
+
+
+phaseMachine.run(3);
+console.log(phaseMachine.toString());
+
 
 function init(){
     // Begin round
