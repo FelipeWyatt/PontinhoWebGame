@@ -3,33 +3,23 @@ import {Card, Deck, Discards, Table, Button, User, Bot, Combination} from './cla
 import {canvas, c} from './classes.js';
 import {canvasHeightPct, canvasWidthPct} from './classes.js';
 
-//-----------------------------GLOBAL VARIABLES--------------------------
-const gameSlowness = 2000 // time of bot plays and waiting for fly in ms
-
-let clickedElement = null
-let holdingCard = null
-let dropSelection = []
-let lockedCard = null // *** trocar dropSelection[0] check por locked card
-let movesTrace = []
-let mouseDownX = 0
-let mouseDownY = 0
-
-let user
-let bots
-let elements
-let order
-let turn
-let lastTurn
-let state
-
-
 //---------------------------FSM (Final State Machine)---------------------
 
 class State {
     constructor(name){
         this.name = name;
+        this.stateMachine = null;
         this.connections = [];
-        this.handler = () => {return this};
+        // Function to return the new state (or not) based on an action
+        this.handler = (action) => {return this};
+        // Piece of code to do when entering the state, called in run inside FSM
+        this.enter = () => {return true};
+        // Piece of code to do when exiting the state, called in run inside FSM
+        this.exit = () => {return true};
+    }
+
+    setStateMachine(stateMachine){
+        this.stateMachine = stateMachine;
     }
 
     setConnections(listPossibleStates){
@@ -39,6 +29,14 @@ class State {
     setHandlerFunction(func){
         this.handler = func;
     }
+
+    setEnterFunction(func){
+        this.enter = func;
+    }
+
+    setExitFunction(func){
+        this.exit = func;
+    }    
 
     toString(){
 		let msg = this.name + " -> (";
@@ -52,11 +50,20 @@ class State {
     }
 }
 
+/*
 class LockedCardState extends State {
 	constructor(name){
 		super(name);
 		this.lockedCard = null;
 	}
+
+    setLockedCard(card){
+        this.lockedCard = card;
+    }
+
+    clearLockedCard(){
+        this.lockedCard = null;
+    }
 }
 
 class TraceableState extends State {
@@ -88,15 +95,20 @@ class TraceableState extends State {
 		return true;
 	}
 }
+*/
 
 //----------------------FSM (Finite State Machine)-----------------
 class FSM {
     // Finite State Machine
-    constructor(name, statesList){
+    constructor(name, statesList, initialState){
         this.name = name;
         this.statesList = statesList;
+        for (let state of statesList){
+            state.setStateMachine(this);
+        }
         this.state = null;
         this.lastState = null;
+        this.init(initialState);
     }
 
     init(initialState){
@@ -107,9 +119,17 @@ class FSM {
     run(action){
         const newState = this.state.handler(action);
 		if (newState != this.state){
-			this.lastState = this.state;
-			this.state = newState;
+            // State changed
+			this.changeState(newState);
 		}
+        return newState
+    }
+
+    changeState(newState){
+        this.state.exit();
+        this.lastState = this.state;
+        newState.enter();
+        this.state = newState;
     }
 
     toString(){
@@ -126,6 +146,41 @@ class FSM {
     }
 }
 
+//-----------------------------GLOBAL VARIABLES--------------------------
+const gameSlowness = 2000 // time of bot plays and waiting for fly in ms
+let frameCount = 0
+let clickedElement = null
+let holdingCard = null
+let dropSelection = [] // ***tratar dropSelection dentro da State machine em vez de global?
+let lockedCard = null  // ***tratar lockedCard dentro da classe LockedCardState em vez de global?
+//                         *** ideia: unificar dropSelection e lockedCard?
+let mouseDownX = 0
+let mouseDownY = 0
+
+//let lastTurn
+//let state
+
+//------------------------------INIT--------------------------
+
+// Begin round
+Deck.init(canvasWidthPct(33.33), canvasHeightPct(35))
+Discards.init(canvasWidthPct(64),  canvasHeightPct(33))
+Table.init(canvasWidthPct(50), canvasHeightPct(66.67), canvasWidthPct(66.67), canvasHeightPct(36.67))
+
+// cancelButton = new Button(canvasWidthPct(8), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Cancel', false)
+// dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), DROP, false)
+
+const user = new User(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
+const bot1 = new Bot(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
+const bot2 = new Bot(Deck.newHand(), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
+const bot3 = new Bot(Deck.newHand(), canvasWidthPct(97) - Card.h/2, canvasHeightPct(50), 'right')
+const bots = [bot1, bot2, bot3]
+
+//                                           cancelButton, dropButton,
+const elements = [Deck, Discards, Table, user, bot1, bot2, bot3]
+
+let order = [user, bot2, bot1, bot3] // sentido horário
+let turn = order[0]
 
 //---------------------------------STATES----------------------------------
 const BUY = new State('buy');
@@ -137,78 +192,210 @@ const JOKER = new State('joker');
 const ENDING = new State('ending');
 const WIN = new State('win');
 
-BUY.setConnections([THINK, DROP]);
+// *** Add ending and joker functionalities
+
+BUY.setConnections([WAIT, DROP]);
+BUY.setEnterFunction(() => {
+    if (turn != user){ // Bot
+        let choice = turn.chooseBuy()
+
+        if (choice == 'Deck'){
+            BUY.stateMachine.changeState(WAIT);
+
+        } else {
+            BUY.stateMachine.changeState(THINK);
+        }
+    }
+});
+
 BUY.setHandlerFunction((clickedElement) => {
-  if (clickedElement == 1){
-    return THINK;
-  } else if (clickedElement == 2){
-      return DROP;
-  }
-  return BUY;
-});
+    if (turn == user){
+        // Possible actions when in BUY state
+        // user buys from deck
+        if (Deck.numberOfCards() > 0 && clickedElement == Deck){
+            user.buyFromDeck();
+            
+            return WAIT; // Next state
+        
+        // user buys from discard pile
+        } else if (Discards.buyable && clickedElement == Discards.lastCard()){
+            lockedCard = user.buyFromDiscards()
+            dropSelection = [lockedCard]
+            return DROP;
+        }
+    }
 
-THINK.setConnections([BUY])
-THINK.setHandlerFunction((clickedElement) => {
-  if (clickedElement == 3){
     return BUY;
-  }
-  return THINK;
 });
 
-DROP.setConnections([BUY])
+DROP.setConnections([THINK, WIN, BUY]);
 DROP.setHandlerFunction((clickedElement) => {
-  if (clickedElement == 1){
-    return BUY;
-  }
-  return DROP;
+    if (turn == user){
+        if (clickedElement == Table){
+            if (user.dropCombination(dropSelection)) {
+                dropSelection = []
+                lockedCard = null
+
+                if (user.hand.numberOfCards() == 0){
+                    return WIN;
+                }
+                
+                return THINK;
+
+            } else {
+                // Invalid selection
+                dropSelection = [lockedCard]
+            }
+        
+        // user added cards to combination
+        } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
+        if (user.addToCombination(dropSelection, clickedElement)) {
+            dropSelection = []
+            lockedCard = null
+            if (user.hand.numberOfCards() == 0){
+                return WIN;
+            }   
+
+            return THINK;
+
+        } else {
+            dropSelection = [lockedCard]
+        }
+    
+        // Click on discard pile to cancel the drop
+        } else if (dropSelection.length == 1 && (clickedElement == Discards || clickedElement == Discards.lastCard())){
+            user.discardCard(lockedCard)
+            dropSelection = []
+            lockedCard = null
+            // Next turn
+            turn = nextPlayer(turn)
+            return BUY;
+        }
+    }
+
+    return DROP;
 });
 
+WAIT.setConnections([THINK]);
+WAIT.setEnterFunction(() => {
+    WAIT.flyTimerNumber = null;
+    WAIT.thinkTimerNumber = null;
+    WAIT.priorityOverUser = true;
+    // Check if bots can buy on the fly, in order
+    if (Discards.buyable){
+        // *** Adicionar feature que quem vai bater com a carta tem prioridade
+        for (let player = nextPlayer(turn); player != previousPlayer(turn); player = nextPlayer(player)){
+            if (player != user) { // then it is bot
+                // *** em vez de checar da melhor comb, checa se é possivel usar a locked card em alguma
+                let hipotheticalBestComb = player.checkForGame([...player.hand.cards, Discards.lastCard()])
 
+                // Bot quer comprar no voô se a melhor combinacao é feita com a carta do descarte
+                if (hipotheticalBestComb != false && hipotheticalBestComb.includes(Discards.lastCard())){
 
-phaseMachine = new FSM('Phase', [BUY, THINK, DROP]);
-phaseMachine.init(BUY);
-console.log(phaseMachine.toString());
+                    WAIT.flyTimerNumber = setTimeout(() => {
+                        turn = player
+                        lockedCard = player.buyFromDiscards()
+                        WAIT.stateMachine.changeState(FLY);
+                    }, gameSlowness);
+                    
+                    return
+                }
+            } else {    
+                // Ja passou pelo user na roda.
+                WAIT.priorityOverUser = false;
+            }
+        }
+    }
 
-phaseMachine.run(1);
-console.log(phaseMachine.toString());
-
-
-phaseMachine.run(3);
-console.log(phaseMachine.toString());
-
-
-function init(){
-    // Begin round
-    Deck.init(canvasWidthPct(33.33), canvasHeightPct(35))
-    Discards.init(canvasWidthPct(64),  canvasHeightPct(33))
-    Table.init(canvasWidthPct(50), canvasHeightPct(66.67), canvasWidthPct(66.67), canvasHeightPct(36.67))
+    // Nenhum player quer a carta
+    WAIT.thinkTimerNumber = setTimeout(() => {
+        WAIT.stateMachine.changeState(THINK);
+    }, gameSlowness);  
     
-    // cancelButton = new Button(canvasWidthPct(8), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), 'Cancel', false)
-    // dropButton = new Button(canvasWidthPct(92), canvasHeightPct(78), canvasWidthPct(14), canvasHeightPct(6), DROP, false)
+});
+
+WAIT.setHandlerFunction((clickedElement) => {
+    if (turn != user){
+        if (clickedElement == Discards.lastCard()){
+            // Checa se ninguem com prioridade quis comprar
+            if (WAIT.flyTimerNumber == null){
+                // Ninguem quis comprar antes
+                clearTimeout(WAIT.thinkTimerNumber); // Cancela o timer para mudar de estado
+                turn = user
+                lockedCard = user.buyFromDiscards()
+                return FLY;   
+            } else if (!WAIT.priorityOverUser) {
+                // Alguem quis comprar antes, mas user tem prioridade
+                clearTimeout(WAIT.flyTimerNumber); // Cancela o timer para mudar de estado
+                turn = user
+                lockedCard = user.buyFromDiscards()
+                return FLY;   
+            }
+        }
+    }
+    return WAIT;
+});
+
+THINK.setConnections([WIN, BUY]);
+THINK.setHandlerFunction((clickedElement) => {
+    if (turn == user){
+        // Discard a card and calls next user
+        if (dropSelection.length == 1 && dropSelection[0].value != "joker" && (clickedElement == Discards || clickedElement == Discards.lastCard())){
+            user.discardCard(dropSelection[0])
+            dropSelection = []
+            if (user.hand.numberOfCards() == 0){
+                return WIN;
+            }
+
+            // Next turn
+            turn = nextPlayer(turn)
+            return BUY;  
+
+            // Calls bot to play
+            setTimeout(botPlay, gameSlowness)
+            
+        // user added cards to combination
+        } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
+            user.addToCombination(dropSelection, clickedElement)
+            dropSelection = []
+
+            if (user.hand.numberOfCards() == 0){
+                return WIN;
+            }
+            
+        // user dropped a combination
+        } else if (dropSelection.length >= 3 && clickedElement == Table){
+            user.dropCombination(dropSelection)
+            dropSelection = []
+
+            if (user.hand.numberOfCards() == 0){
+                return WIN;
+            }
+            
+        // user tried to discard invalid card
+        } else if ((dropSelection.length > 1 || (dropSelection.length == 1 && dropSelection[0].value == "joker")) && clickedElement == Discards){
+            // *** Adicionar warning se tentar jogar joker ou mais de uma carta
+            console.log('Nao pode jogar essa selecao de cartas')
+            dropSelection = []
+        }
+    }
     
-    user = new User(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(97) - Card.h/2)
-    const bot1 = new Bot(Deck.newHand(), canvasWidthPct(50), canvasHeightPct(3) + Card.h/2, 'up')
-    const bot2 = new Bot(Deck.newHand(), canvasWidthPct(3) + Card.h/2, canvasHeightPct(50), 'left')
-    const bot3 = new Bot(Deck.newHand(), canvasWidthPct(97) - Card.h/2, canvasHeightPct(50), 'right')
-    bots = [bot1, bot2, bot3]
+    return THINK;
+});
 
-    //                                           cancelButton, dropButton,
-    elements = [Deck, Discards, Table, user, bot1, bot2, bot3]
+const phaseMachine = new FSM('Phase', [BUY, THINK, DROP, WAIT], BUY);
+console.log(phaseMachine.toString());
 
-    order = [user, bot2, bot1, bot3] // sentido horário
-    turn = order[0]
-    state = BUY
-}
 
 function htmlDisplayAttributes() {
     // update the cells in the table with the values of the Round class attributes
     document.getElementById("deck").innerHTML = Deck.numberOfCards()
     document.getElementById("discardPile").innerHTML = Discards.numberOfCards()
     document.getElementById("turn").innerHTML = turn.orientation
-    document.getElementById("state").innerHTML = state
+    document.getElementById("state").innerHTML = phaseMachine.state.name
 }
     
-
+/*
 function runStateMachine(){
     // Called on mousedown event
     // States when is user's turn
@@ -368,7 +555,7 @@ function runStateMachine(){
     }
 
 }
-
+*/
 
 function nextPlayer(player){
     const currentIndex = order.indexOf(player)
@@ -390,6 +577,7 @@ function previousPlayer(player){
     }
 }
 
+/*
 function checkWin(){
     for (let player of [user, ...bots]){
         if (player.hand.numberOfCards() == 0){
@@ -405,7 +593,6 @@ function checkWin(){
     }
     return false
 }
-
 
 
 function botPlay(){
@@ -558,11 +745,12 @@ function botPlay(){
 }
 
   
+*/
 
 //---------------------------------MAIN------------------------------
 
 function animate(){ // default FPS = 60
-    // setup block
+    // setup block begin
     requestAnimationFrame(animate)
     c.clearRect(0, 0, innerWidth, innerHeight)
     // setup block end
@@ -576,10 +764,14 @@ function animate(){ // default FPS = 60
 
     htmlDisplayAttributes()
 
+    
+
+    frameCount++;
+
 }
 
 
-init()
+// init()
 animate()
 
 
@@ -642,7 +834,8 @@ addEventListener('mousedown', (event) => {
         }
     }
 
-    runStateMachine()
+    // runStateMachine()
+    phaseMachine.run(clickedElement);
 })
 
 addEventListener('mouseup', (event) => {
