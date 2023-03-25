@@ -11,7 +11,7 @@ class State {
         this.stateMachine = null;
         this.connections = [];
         // Function to return the new state (or not) based on an action
-        this.handler = (action) => {return this};
+        this.eventHandler = (event) => {return this};
         // Piece of code to do when entering the state, called in run inside FSM
         this.enter = () => {return true};
         // Piece of code to do when exiting the state, called in run inside FSM
@@ -27,7 +27,7 @@ class State {
     }
 
     setHandlerFunction(func){
-        this.handler = func;
+        this.eventHandler = func;
     }
 
     setEnterFunction(func){
@@ -100,15 +100,22 @@ class TraceableState extends State {
 //----------------------FSM (Finite State Machine)-----------------
 class FSM {
     // Finite State Machine
-    constructor(name, statesList, initialState){
+    constructor(name){
         this.name = name;
-        this.statesList = statesList;
-        for (let state of statesList){
-            state.setStateMachine(this);
-        }
+        this.statesList = [];
         this.state = null;
         this.lastState = null;
-        this.init(initialState);
+    }
+
+    addState(newState){
+        newState.setStateMachine(this);
+        this.statesList.push(newState);
+    }
+
+    addStates(newStates){
+        for (let state of newStates){
+            this.addState(state);
+        }
     }
 
     init(initialState){
@@ -116,13 +123,9 @@ class FSM {
         this.lastState = this.state;
     }
 
-    run(action){
-        const newState = this.state.handler(action);
-		if (newState != this.state){
-            // State changed
-			this.changeState(newState);
-		}
-        return newState
+    run(event){
+        this.state.eventHandler(event);
+        return this.state;
     }
 
     changeState(newState){
@@ -157,9 +160,6 @@ let lockedCard = null  // ***tratar lockedCard dentro da classe LockedCardState 
 let mouseDownX = 0
 let mouseDownY = 0
 
-//let lastTurn
-//let state
-
 //------------------------------INIT--------------------------
 
 // Begin round
@@ -181,8 +181,12 @@ const elements = [Deck, Discards, Table, user, bot1, bot2, bot3]
 
 let order = [user, bot2, bot1, bot3] // sentido horário
 let turn = order[0]
+let lastTurn = null // *** Criar FSM para turnos, e método que volta para o ultimo turno, trocar turn = nextPlayer(turn) para funcao dessa nova FSM 
 
 //---------------------------------STATES----------------------------------
+
+const phaseMachine = new FSM('Phase');
+
 const BUY = new State('buy');
 const DROP = new State('drop');
 const WAIT = new State('wait');
@@ -197,14 +201,19 @@ const WIN = new State('win');
 BUY.setConnections([WAIT, DROP]);
 BUY.setEnterFunction(() => {
     if (turn != user){ // Bot
-        let choice = turn.chooseBuy()
+        // *** Só compra se o descarte seria a melhor combinacao, para melhorar comprar se gerar jogo
+        let hipotheticalBestComb = turn.checkForGame([...turn.hand.cards, Discards.lastCard()])
 
-        if (choice == 'Deck'){
-            BUY.stateMachine.changeState(WAIT);
-
+        // Compra do descarte se a melhor combinacao é feita com a carta do descarte
+        if (hipotheticalBestComb != false && hipotheticalBestComb.includes(Discards.lastCard())){
+            lockedCard = turn.buyFromDiscards();
+            phaseMachine.changeState(DROP);
+            
         } else {
-            BUY.stateMachine.changeState(THINK);
+            turn.buyFromDeck()
+            phaseMachine.changeState(WAIT);
         }
+
     }
 });
 
@@ -215,20 +224,25 @@ BUY.setHandlerFunction((clickedElement) => {
         if (Deck.numberOfCards() > 0 && clickedElement == Deck){
             user.buyFromDeck();
             
-            return WAIT; // Next state
+            phaseMachine.changeState(WAIT); // Next state
         
         // user buys from discard pile
         } else if (Discards.buyable && clickedElement == Discards.lastCard()){
             lockedCard = user.buyFromDiscards()
             dropSelection = [lockedCard]
-            return DROP;
+            
+            phaseMachine.changeState(DROP);
         }
     }
-
-    return BUY;
 });
 
 DROP.setConnections([THINK, WIN, BUY]);
+DROP.setEnterFunction(() => {
+    if (turn != user) { // Bot
+        // *** Só compra se o descarte seria a melhor combinacao, para melhorar comprar se gerar jogo
+        turn.dropCombination(turn.checkForGame([...turn.hand.cards, lockedCard]));
+    }
+});
 DROP.setHandlerFunction((clickedElement) => {
     if (turn == user){
         if (clickedElement == Table){
@@ -237,10 +251,10 @@ DROP.setHandlerFunction((clickedElement) => {
                 lockedCard = null
 
                 if (user.hand.numberOfCards() == 0){
-                    return WIN;
+                    phaseMachine.changeState(WIN);
                 }
                 
-                return THINK;
+                phaseMachine.changeState(THINK);
 
             } else {
                 // Invalid selection
@@ -253,10 +267,10 @@ DROP.setHandlerFunction((clickedElement) => {
             dropSelection = []
             lockedCard = null
             if (user.hand.numberOfCards() == 0){
-                return WIN;
-            }   
-
-            return THINK;
+                phaseMachine.changeState(WIN);
+            }
+            
+            phaseMachine.changeState(THINK);
 
         } else {
             dropSelection = [lockedCard]
@@ -269,15 +283,14 @@ DROP.setHandlerFunction((clickedElement) => {
             lockedCard = null
             // Next turn
             turn = nextPlayer(turn)
-            return BUY;
+            phaseMachine.changeState(BUY);
         }
-    }
-
-    return DROP;
+    } 
 });
 
 WAIT.setConnections([THINK]);
 WAIT.setEnterFunction(() => {
+    console.log('Entrou na fase wait')
     WAIT.flyTimerNumber = null;
     WAIT.thinkTimerNumber = null;
     WAIT.priorityOverUser = true;
@@ -295,7 +308,7 @@ WAIT.setEnterFunction(() => {
                     WAIT.flyTimerNumber = setTimeout(() => {
                         turn = player
                         lockedCard = player.buyFromDiscards()
-                        WAIT.stateMachine.changeState(FLY);
+                        phaseMachine.changeState(FLY);
                     }, gameSlowness);
                     
                     return
@@ -309,34 +322,70 @@ WAIT.setEnterFunction(() => {
 
     // Nenhum player quer a carta
     WAIT.thinkTimerNumber = setTimeout(() => {
-        WAIT.stateMachine.changeState(THINK);
+        phaseMachine.changeState(THINK);
     }, gameSlowness);  
     
 });
 
 WAIT.setHandlerFunction((clickedElement) => {
-    if (turn != user){
+    if (turn == user){
         if (clickedElement == Discards.lastCard()){
             // Checa se ninguem com prioridade quis comprar
             if (WAIT.flyTimerNumber == null){
                 // Ninguem quis comprar antes
                 clearTimeout(WAIT.thinkTimerNumber); // Cancela o timer para mudar de estado
+                lastTurn = turn
                 turn = user
                 lockedCard = user.buyFromDiscards()
-                return FLY;   
+                phaseMachine.changeState(FLY);  
             } else if (!WAIT.priorityOverUser) {
                 // Alguem quis comprar antes, mas user tem prioridade
                 clearTimeout(WAIT.flyTimerNumber); // Cancela o timer para mudar de estado
+                lastTurn = turn
                 turn = user
                 lockedCard = user.buyFromDiscards()
-                return FLY;   
+                phaseMachine.changeState(FLY);  
             }
         }
     }
-    return WAIT;
 });
 
 THINK.setConnections([WIN, BUY]);
+THINK.setEnterFunction(() => {
+    if (turn != user) {// Bot
+        // Check if there is a game to drop
+        // *** ideia para melhorar eficiencia em vez de tratar dos objetos cards, 
+        //     tratar de objetos mais simples como {value, suit}
+
+        // First tries to drop combinations
+        let response;
+        do{
+            response = turn.checkForGame(turn.hand.cards);
+            
+            if (response != false){
+                turn.dropCombination(response);
+            }
+        } while (response != false);
+
+        // Adiciona cards até nao ter nenhum para adicionar a combinacao
+        let added;
+        do {
+            added = turn.checkForAddition();
+        } while (added);
+
+        if (turn.hand.cards.length > 0){
+            turn.discardCard(turn.chooseDiscardCard())
+        }
+
+        if (turn.hand.numberOfCards() == 0){
+            phaseMachine.changeState(WIN);  
+        }
+
+        // Next turn
+        turn = nextPlayer(turn)
+        phaseMachine.changeState(BUY);
+    }
+});
 THINK.setHandlerFunction((clickedElement) => {
     if (turn == user){
         // Discard a card and calls next user
@@ -344,15 +393,12 @@ THINK.setHandlerFunction((clickedElement) => {
             user.discardCard(dropSelection[0])
             dropSelection = []
             if (user.hand.numberOfCards() == 0){
-                return WIN;
+                phaseMachine.changeState(WIN);  
             }
 
             // Next turn
             turn = nextPlayer(turn)
-            return BUY;  
-
-            // Calls bot to play
-            setTimeout(botPlay, gameSlowness)
+            phaseMachine.changeState(BUY);
             
         // user added cards to combination
         } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
@@ -360,7 +406,7 @@ THINK.setHandlerFunction((clickedElement) => {
             dropSelection = []
 
             if (user.hand.numberOfCards() == 0){
-                return WIN;
+                phaseMachine.changeState(WIN);  
             }
             
         // user dropped a combination
@@ -369,7 +415,7 @@ THINK.setHandlerFunction((clickedElement) => {
             dropSelection = []
 
             if (user.hand.numberOfCards() == 0){
-                return WIN;
+                phaseMachine.changeState(WIN);  
             }
             
         // user tried to discard invalid card
@@ -379,11 +425,57 @@ THINK.setHandlerFunction((clickedElement) => {
             dropSelection = []
         }
     }
-    
-    return THINK;
 });
 
-const phaseMachine = new FSM('Phase', [BUY, THINK, DROP, WAIT], BUY);
+FLY.setConnections([WIN, BUY]);
+FLY.setHandlerFunction((clickedElement) => {
+    if (turn == user) {
+        // Selected drop area to drop currently combination on the fly
+        if (dropSelection.length >= 3 && clickedElement == Table){
+            if (user.dropCombination(dropSelection)) {
+                dropSelection = []
+                lockedCard = null
+                turn = lastTurn
+                if (user.hand.numberOfCards() == 0){
+                    phaseMachine.changeState(WIN);
+                }
+                
+                phaseMachine.changeState(THINK);
+                
+            } else {
+                dropSelection = [lockedCard]
+            }
+    
+        // user added cards to combination
+        } else if (dropSelection.length >= 1 && clickedElement instanceof Combination){
+            if (user.addToCombination(dropSelection, clickedElement)) {
+                dropSelection = []
+                lockedCard = null
+                turn = lastTurn
+                
+                if (user.hand.numberOfCards() == 0){
+                    phaseMachine.changeState(WIN);
+                }
+                
+                phaseMachine.changeState(THINK);
+            } else {
+                dropSelection = [lockedCard]
+            }
+            
+        // Selected drop area to cancel the fly
+        } else if (dropSelection.length == 1 && (clickedElement == Discards || clickedElement == Discards.lastCard())){
+            user.discardCard(lockedCard)
+            dropSelection = []
+            lockedCard = null
+            turn = lastTurn
+
+            phaseMachine.changeState(THINK);
+        }
+    }
+});
+
+phaseMachine.addStates([BUY, DROP, WAIT, THINK, FLY, WIN]);
+phaseMachine.init(BUY);
 console.log(phaseMachine.toString());
 
 
@@ -556,6 +648,10 @@ function runStateMachine(){
 
 }
 */
+
+function gameSlowPct(pct) {
+    return Math.round(gameSlowness*pct/100);
+}
 
 function nextPlayer(player){
     const currentIndex = order.indexOf(player)

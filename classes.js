@@ -1079,21 +1079,6 @@ export class Bot extends Player {
         return false
     }
 
-    chooseBuy(){
-        let hipotheticalBestComb = this.checkForGame([...this.hand.cards, Discards.lastCard()])
-
-        // Compra do descarte se a melhor combinacao é feita com a carta do descarte
-        if (hipotheticalBestComb != false && hipotheticalBestComb.includes(Discards.lastCard())){
-            this.buyFromDiscards()
-            // Ja baixa combinacao para nao ser necessario entrar no estado 'drop'
-            this.dropCombination(hipotheticalBestComb)
-
-            return 'Discards'
-        } else {
-            this.buyFromDeck()
-            return 'Deck'
-        }
-    }
 
     checkForAddition(){
         if (Table.combs.length > 0){
