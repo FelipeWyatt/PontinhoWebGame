@@ -759,7 +759,7 @@ addEventListener('mousemove', (event) => {
         holdingCard.newPos(mouseX - holdingCard.grab.dx, mouseY - holdingCard.grab.dy)
     } 
 
-    const cond1 = turn == user && holdingCard == null
+    const cond1 = turn == user && holdingCard == null;
 
     Deck.highlight = cond1 && phaseMachine.state == BUY && Deck.insideArea(mouseX, mouseY)
 
