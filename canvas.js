@@ -3,6 +3,25 @@ import {Card, Deck, Discards, Table, Button, User, Bot, Combination} from './cla
 import {canvas, c} from './classes.js';
 import {canvasHeightPct, canvasWidthPct} from './classes.js';
 
+
+// -----------------------------TO DO LIST--------------------------------
+// + Adicionar estados de Segurando joker e Batida
+// + Fazer funcionar para web mobile
+//      - Tutorial: https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
+//      - Fazer zoom fitar tela
+// + Escrever Livro de regras
+//      - Incluir batidas por 4 dublês e flush
+//      - Incluir sistema de fichas
+//      - Incluir Espivinca e Loba
+// + Tutorial e/ou dicas com pop-ups
+// + Resolver pontuação da Rodada e fichas ganhas na sessão
+// + Possibilitar alterar velocidade das jogadas dos bots
+// + Alterar nível de dificuldade dos bots
+
+// + Futuras versões e ideias:
+//      - Versão 2.0: de 4 a 6 jogadores na mesa, gráficos melhorados e mais eficiente.
+//      - Versão 3.0: database e online/friends play
+
 //---------------------------FSM (Final State Machine)---------------------
 
 class State {
