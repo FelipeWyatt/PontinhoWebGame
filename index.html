@@ -22,6 +22,7 @@
         .container tr{
             vertical-align: top;
             height: 200px;
+
         }
 
         .container tr tr{
@@ -31,11 +32,15 @@
         .scoreTables, .lifeTable, .attributes{
             border-style: hidden;
             border-collapse: collapse;
+            user-select: none;
+
         }
 
         .attributes {
             text-align: left;
             border: 0;
+            user-select: none;
+
         }
 
         
@@ -99,8 +104,8 @@
                           <td id="turn"> </td>
                         </tr>
                         <tr>
-                          <td>phase</td>
-                          <td id="phase"> </td>
+                          <td>state</td>
+                          <td id="state"> </td>
                         </tr>
                       </tbody>
                     </table>
@@ -142,8 +147,8 @@
       </thead>
     </table>
   
+    <script src="classes.js" type="module"></script> 
     <script src="canvas.js" type="module"></script>
-    <!-- <script src="chatGPT3_tests.js" type="module"></script>  -->
   </body> 
   
 </html> 
