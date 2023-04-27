@@ -1,5 +1,5 @@
 # Pontinho_game
 
-Using the help of Chat GPT3 to create a vanilla html canvas card game called "Pontinho".
+Creating a vanilla js/html canvas card game called "Pontinho", translates to "tiny points".
 
-The game consists of ending the cards in your hand by arranging sequences of cards.
+The game consists of getting rid of all of the cards in your hand by setting sequences and combinations.
