@@ -963,7 +963,9 @@ class Player {
 
     buyFromDeck(){
         // player took an action to buy from deck
-        this.hand.add(Deck.buy())
+        let card = Deck.buy()
+        card.highlight = false
+        this.hand.add(card)
     }
 
     buyFromDiscards(){

@@ -654,11 +654,6 @@ function animate(){ // default FPS = 60
     // setup block begin
     requestAnimationFrame(animate)
     c.clearRect(0, 0, innerWidth, innerHeight)
-    // setup block end
-    // if (phaseMachine.state instanceof StateWithDropSelection) {
-    //     user.hand.cards.forEach(card => {card.highlight = phaseMachine.state.dropSelection.includes(card)})
-
-    // }
 
     elements.forEach(elem => {elem.update()})
     // desenha a carta segurada por ultimo para ficar em primeiro
@@ -674,15 +669,7 @@ function animate(){ // default FPS = 60
 
 }
 
-
-// init()
-animate()
-
-
-addEventListener('mousedown', (event) => {
-    const rect = canvas.getBoundingClientRect();
-    mouseDownX = event.clientX - rect.left;
-    mouseDownY = event.clientY - rect.top;
+function mouseDownHandler(mouseDownX, mouseDownY){
 
     // Finds which element it was clicked on, with a priority
     if (Deck.insideArea(mouseDownX, mouseDownY)){
@@ -740,12 +727,9 @@ addEventListener('mousedown', (event) => {
 
     // runStateMachine()
     phaseMachine.run(clickedElement);
-})
+}
 
-addEventListener('mouseup', (event) => {
-    const rect = canvas.getBoundingClientRect();
-    let mouseUpX = event.clientX - rect.left;
-    let mouseUpY = event.clientY - rect.top;
+function mouseUpHandler(mouseUpX, mouseUpY){
 
     if (holdingCard != null){
         holdingCard.grab.holding = false
@@ -767,12 +751,9 @@ addEventListener('mouseup', (event) => {
         }
     }
 
-})
+}
 
-addEventListener('mousemove', (event) => {
-    const rect = canvas.getBoundingClientRect()
-    let mouseX = event.clientX - rect.left
-    let mouseY = event.clientY - rect.top
+function mouseMoveHandler(mouseX, mouseY){
 
     if (holdingCard != null) {
         holdingCard.newPos(mouseX - holdingCard.grab.dx, mouseY - holdingCard.grab.dy)
@@ -800,4 +781,75 @@ addEventListener('mousemove', (event) => {
     // } else {
     //     user.hand.spacing = Hand.defaultSpacing
     // }
-})
+}
+
+// init()
+animate()
+
+addEventListener('mousedown', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseDownX = event.clientX - rect.left;
+    mouseDownY = event.clientY - rect.top;
+    mouseDownHandler(mouseDownX, mouseDownY);
+});
+
+addEventListener('mouseup', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    let mouseUpX = event.clientX - rect.left;
+    let mouseUpY = event.clientY - rect.top;
+    mouseUpHandler(mouseUpX, mouseUpY);
+});
+
+addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    let mouseX = event.clientX - rect.left;
+    let mouseY = event.clientY - rect.top;
+    mouseMoveHandler(mouseX, mouseY);
+});
+
+// Mobile app browser setup
+// Set up touch events for mobile, etc
+canvas.addEventListener("touchstart", function (event) {
+    const rect = canvas.getBoundingClientRect();
+    let touchDownX = event.touches[0].clientX - rect.left;
+    let touchDownY = event.touches[0].clientY - rect.top;
+
+    mouseDownHandler(touchDownX, touchDownY);
+});
+
+canvas.addEventListener("touchend", function (event) {
+    const rect = canvas.getBoundingClientRect();
+    let touchUpX = event.touches[0].clientX - rect.left;
+    let touchUpY = event.touches[0].clientY - rect.top;
+
+    mouseUpHandler(touchUpX, touchUpY);
+});
+
+
+canvas.addEventListener("touchmove", function (event) {
+    const rect = canvas.getBoundingClientRect();
+    let touchMoveX = event.touches[0].clientX - rect.left;
+    let touchMoveY = event.touches[0].clientY - rect.top;
+
+    mouseMoveHandler(touchMoveX, touchMoveY);
+});
+
+
+// Prevent scrolling when touching the canvas
+document.body.addEventListener("touchstart", function (e) {
+    if (e.target == canvas) {
+      e.preventDefault();
+    }
+  }, false);
+
+document.body.addEventListener("touchend", function (e) {
+if (e.target == canvas) {
+    e.preventDefault();
+}
+}, false);
+
+document.body.addEventListener("touchmove", function (e) {
+if (e.target == canvas) {
+    e.preventDefault();
+}
+}, false);
