@@ -581,6 +581,41 @@ export class Combination extends Hand {
         let response = Table.checkCombination(this.cards.concat(cards))
         if (response != false){
             // then cards is the cards array sorted
+            if (response[1] == 'trio') {
+                // Check if added cards were the tourist cards
+                let combCountSuits = {}
+                let additionCountSuits = {}
+                for (let suit of SUITS){
+                    combCountSuits[suit] = 0
+                    additionCountSuits[suit] = 0
+                }
+                for (let card of this.cards){
+                    if (card.value != "joker"){
+                        // Joker cards dont have a suit
+                        combCountSuits[card.suit]++
+                    }
+                }
+                for (let card of cards){
+                    if (card.value != "joker"){
+                        // Joker cards dont have a suit
+                        additionCountSuits[card.suit]++
+                    }
+                }
+                let tourist = null
+                for (let suit of SUITS) {
+                    if (combCountSuits[suit] == 0) {
+                        tourist = suit
+                    }
+                }
+
+                if (tourist != null) {
+                    // If 0 or 2 is okay
+                    if (additionCountSuits[tourist] == 1) {
+                        return false
+                    }
+                }
+
+            }
             this.cards = response[0] // [cards, type]
             this.cards.forEach(card => {
                 card.flipped = this.flipped;
@@ -1140,5 +1175,18 @@ export class Bot extends Player {
 export class User extends Player{
     constructor(cards, x, y){
         super(cards, x, y, 'down', true, true, Card.w + 2)
+    }
+
+    update(){
+        super.update()
+        
+        // draw the sum of the cards value
+        c.save() // Save the current context state
+        c.translate(this.x - 10, this.y - Card.h*0.7); 
+        c.fillStyle = "black"
+        c.font = canvasHeightPct(3.33).toString() + "px Oswald" // 20px para canvas=600
+        c.fillText(Table.sumCards(this.hand.cards).toString(), 0, 0)
+     
+        c.restore();
     }
 }

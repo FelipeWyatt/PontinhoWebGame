@@ -243,7 +243,9 @@ class FSM {
         if (player.hand.numberOfCards() == 0){
             phaseMachine.state = this.finalState;
             turn = player;
+            return true
         }
+        return false
     }
 
     toString(){
@@ -351,8 +353,10 @@ DROP.setEnterFunction(() => {
         // *** Só compra se o descarte seria a melhor combinacao, para melhorar comprar se gerar jogo
         setTimeout(() => {
             turn.dropCombination(turn.checkForGame([...turn.hand.cards, DROP.lockedCard]));
-            phaseMachine.checkWin(turn);
+            if(phaseMachine.checkWin(turn)){return};
+            
             phaseMachine.changeState(THINK);
+            
         }, gameSlowness);
     }
 });
@@ -361,7 +365,7 @@ DROP.setHandlerFunction((clickedElement) => {
         if (clickedElement == Table){
             if (user.dropCombination(DROP.dropSelection)) {
                 
-                phaseMachine.checkWin(user);
+                if(phaseMachine.checkWin(user)){return};
                 
                 phaseMachine.changeState(THINK);
 
@@ -374,7 +378,7 @@ DROP.setHandlerFunction((clickedElement) => {
         } else if (DROP.dropSelection.length >= 1 && clickedElement instanceof Combination){
             if (user.addToCombination(DROP.dropSelection, clickedElement)) {
 
-                phaseMachine.checkWin(user);
+                if(phaseMachine.checkWin(user)){return};
                 
                 phaseMachine.changeState(THINK);
 
@@ -498,12 +502,11 @@ THINK.setEnterFunction(() => {
                     turn.discardCard(turn.chooseDiscardCard())
                 }
         
-                phaseMachine.checkWin(turn);
-        
+                if(phaseMachine.checkWin(turn)){return};
+                           
                 // Next turn
                 turn = nextPlayer(turn)
                 phaseMachine.changeState(BUY);
-                
             }, gameSlowness);
             
         }, gameSlowness);
@@ -513,10 +516,10 @@ THINK.setEnterFunction(() => {
 THINK.setHandlerFunction((clickedElement) => {
     if (turn == user){
         // Discard a card and calls next user
-        if (THINK.dropSelection.length == 1 && THINK.dropSelection[0].value != "joker" && (clickedElement == Discards || clickedElement == Discards.lastCard())){
+        if (THINK.dropSelection.length == 1 && THINK.dropSelection[0].value != "joker" && (clickedElement == Discards || (Discards.lastCard() != null && clickedElement == Discards.lastCard()))){
             user.discardCard(THINK.dropSelection[0])
 
-            phaseMachine.checkWin(user);
+            if(phaseMachine.checkWin(user)){return};
 
             // Next turn
             turn = nextPlayer(turn)
@@ -528,7 +531,7 @@ THINK.setHandlerFunction((clickedElement) => {
             
             THINK.clearDropSelection();
 
-            phaseMachine.checkWin(user);
+            if(phaseMachine.checkWin(user)){return};
             
         // user dropped a combination
         } else if (THINK.dropSelection.length >= 3 && clickedElement == Table){
@@ -536,7 +539,7 @@ THINK.setHandlerFunction((clickedElement) => {
 
             THINK.clearDropSelection();
 
-            phaseMachine.checkWin(user);
+            if(phaseMachine.checkWin(user)){return};
             
         // user tried to discard invalid card
         } else if ((THINK.dropSelection.length > 1 || (THINK.dropSelection.length == 1 && THINK.dropSelection[0].value == "joker")) && clickedElement == Discards){
@@ -557,7 +560,7 @@ FLY.setEnterFunction(() => {
             if (hipotheticalBestComb != false && hipotheticalBestComb.includes(FLY.lockedCard)){
                 turn.dropCombination(hipotheticalBestComb);
                 
-                phaseMachine.checkWin(turn);
+                if(phaseMachine.checkWin(turn)){return};
                                 
             } else {
                 turn.discardCard(FLY.lockedCard)
@@ -576,7 +579,7 @@ FLY.setHandlerFunction((clickedElement) => {
         // Selected drop area to drop currently combination on the fly
         if (FLY.dropSelection.length >= 3 && clickedElement == Table){
             if (user.dropCombination(FLY.dropSelection)) {
-                phaseMachine.checkWin(user);
+                if(phaseMachine.checkWin(user)){return};
                 
                 turn = lastTurn
                 
@@ -589,7 +592,7 @@ FLY.setHandlerFunction((clickedElement) => {
         // user added cards to combination
         } else if (FLY.dropSelection.length >= 1 && clickedElement instanceof Combination){
             if (user.addToCombination(FLY.dropSelection, clickedElement)) {
-                phaseMachine.checkWin(user);
+                if(phaseMachine.checkWin(user)){return};
                 
                 turn = lastTurn
                                 
