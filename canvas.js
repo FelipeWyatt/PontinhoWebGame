@@ -123,7 +123,9 @@ class StateWithLockedCard extends StateWithDropSelection {
 		super(name);
 		this.lockedCard = null;
         this.defaultEnterFunction = (lockedCard) => {
-            this.setLockedCard(lockedCard);
+            if (lockedCard != null){ // null to be used as a normal StateWithDropSelection
+                this.setLockedCard(lockedCard);
+            }
         };
         this.defaultExitFunction = () => {
             this.clearLockedCard();
@@ -155,41 +157,51 @@ class StateWithLockedCard extends StateWithDropSelection {
     }
 
     resetDropSelection(){
-        this.setDropSelection([this.lockedCard]);
+        if (this.lockedCard != null) {
+            this.setDropSelection([this.lockedCard]);
+        }
     }
 }
 
-/*
-class TraceableState extends State {
-	constructor(name){
-		super(name);
-		this.movements = [];
-	}
+
+// class TraceableState extends State {
+// 	constructor(name){
+// 		super(name);
+//         this.savedObjs = [];
+//         // Saves the current objects, if state cancelled, returns all previous objs
+//         this.defaultEnterFunction = (lockedCard) => {
+//             this.setLockedCard(lockedCard);
+//             this.savedObjs = [...]
+//         };
+//         this.defaultExitFunction = () => {
+//             this.clearLockedCard();
+//         };
+// 	}
 	
-	addMovement(card, fromObj, toObj){
-		this.movements.push({'obj':card, 'from':fromObj, 'to':toObj});
-	}
+// 	// addMovement(card, fromObj, toObj){
+// 	// 	this.movements.push({'obj':card, 'from':fromObj, 'to':toObj});
+// 	// }
 	
-	clearMovements(){
-		this.movements = [];
-	}
+// 	// clearMovements(){
+// 	// 	this.movements = [];
+// 	// }
 	
-	undoMovements(){
-		for (let i = this.movements.length - 1; i >= 0; i--){
-			let card = this.movements[i]['card'];
-			let fromObj = this.movements[i]['from'];
-			let toObj = this.movements[i]['to'];
+// 	// undoMovements(){
+// 	// 	for (let i = this.movements.length - 1; i >= 0; i--){
+// 	// 		let card = this.movements[i]['card'];
+// 	// 		let fromObj = this.movements[i]['from'];
+// 	// 		let toObj = this.movements[i]['to'];
 			
-			// Para cada tipo de objeto, adicionar de forma diferente
-			toObj.remove(card);
-			toObj.update();
-			fromObj.add(card);
-			fromObj.update();
-		}
-		return true;
-	}
-}
-*/
+// 	// 		// Para cada tipo de objeto, adicionar de forma diferente
+// 	// 		toObj.remove(card);
+// 	// 		toObj.update();
+// 	// 		fromObj.add(card);
+// 	// 		fromObj.update();
+// 	// 	}
+// 	// 	return true;
+// 	// }
+// }
+
 
 //----------------------FSM (Finite State Machine)-----------------
 class FSM {
