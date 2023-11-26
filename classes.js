@@ -522,46 +522,46 @@ export class Hand extends Stack{
         }
     }
 
-    update(){
+    update(jump = false){
+        if (!jump){
+            let n = this.cards.length
+            let xi = this.x - (this.spacing)*(n - 1)/2
+            let yi = this.y - (this.spacing)*(n - 1)/2
 
-        let n = this.cards.length
-        let xi = this.x - (this.spacing)*(n - 1)/2
-        let yi = this.y - (this.spacing)*(n - 1)/2
-
-        if (this.orientation == 'up' || this.orientation == 'down'){
-            if (!this.sorted){
-                // Ordena vetor das cartas pela posição em x
-                this.cards.sort(function(card1, card2){
-                    return card1.x - card2.x;
-                });
-            }
-
-            for (let i = 0; i < n; i++){
-                if (!this.cards[i].grab.holding){ // Altera a posicao so se carta nao esta sendo segurada
-                    this.cards[i].newTargetPos(xi + (this.spacing)*i, this.y)
+            if (this.orientation == 'up' || this.orientation == 'down'){
+                if (!this.sorted){
+                    // Ordena vetor das cartas pela posição em x
+                    this.cards.sort(function(card1, card2){
+                        return card1.x - card2.x;
+                    });
                 }
-            }
-            
-            // Reverte para desenhar as cartas da esquerda para direita
-            if (this.orientation == 'up') { this.cards.reverse() }
-        } else {
-            if(!this.sorted){
-                // Ordena vetor das cartas pela posição em y
-                this.cards.sort(function(card1, card2){
-                    return card1.y - card2.y;
-                });
-            }
-            
-            for (let i = 0; i < n; i++){
-                if (!this.cards[i].grab.holding){
-                    this.cards[i].newTargetPos(this.x, yi + (this.spacing)*i)
-                }
-            }
 
-            // Reverte para desenhar as cartas da esquerda para direita
-            if (this.orientation == 'right') { this.cards.reverse() }
+                for (let i = 0; i < n; i++){
+                    if (!this.cards[i].grab.holding){ // Altera a posicao so se carta nao esta sendo segurada
+                        this.cards[i].newTargetPos(xi + (this.spacing)*i, this.y)
+                    }
+                }
+                
+                // Reverte para desenhar as cartas da esquerda para direita
+                if (this.orientation == 'up') { this.cards.reverse() }
+            } else {
+                if(!this.sorted){
+                    // Ordena vetor das cartas pela posição em y
+                    this.cards.sort(function(card1, card2){
+                        return card1.y - card2.y;
+                    });
+                }
+                
+                for (let i = 0; i < n; i++){
+                    if (!this.cards[i].grab.holding){
+                        this.cards[i].newTargetPos(this.x, yi + (this.spacing)*i)
+                    }
+                }
+
+                // Reverte para desenhar as cartas da esquerda para direita
+                if (this.orientation == 'right') { this.cards.reverse() }
+            }
         }
-
         super.update()
     }
 }
@@ -574,7 +574,10 @@ export class Combination extends Hand {
     }
 
     calculateWidth(){
-        return (this.spacing)*(this.numberOfCards() - 1) + Card.w
+        if (this.type == 'trio'){
+            return (this.numberOfCards() - 1)*(Card.w + 2) + Card.w;
+        } 
+        return (this.spacing)*(this.numberOfCards() - 1) + Card.w;
     }
 
     addToCombination(cards){
@@ -633,22 +636,44 @@ export class Combination extends Hand {
                 card.highlight = this.highlight;
             })
         }
-        super.update()
+        
+        let n = this.cards.length
+        let xi = this.x - (this.spacing)*(n - 1)/2
+
+        if (!this.sorted){
+            // Ordena vetor das cartas pela posição em x
+            this.cards.sort(function(card1, card2){
+                return card1.x - card2.x;
+            });
+        }
+
+        if (this.type == 'seq' || this.type == null){
+            for (let i = 0; i < n; i++){
+                if (!this.cards[i].grab.holding){ // Altera a posicao so se carta nao esta sendo segurada
+                    this.cards[i].newTargetPos(xi + (this.spacing)*i, this.y)
+                }
+            }
+
+        } else if (this.type == 'trio') {
+            let xAux = xi;
+            let yAux = this.y;
+
+            this.cards[0].newTargetPos(xAux, yAux);
+            for (let i = 1; i < n; i++){
+                if (this.cards[i].suit == this.cards[i-1].suit) {
+                    yAux += this.spacing;
+                } else {
+                    xAux += Card.w + 2;
+                    yAux = this.y;
+                }
+                this.cards[i].newTargetPos(xAux, yAux);
+            }
+        }
+            
+
+        super.update(true)
     }
     
-    // sort of seq depends on the joker placement, not as simple as below
-    // sort(){
-    //     if (this.type == 'seq'){
-    //         this.cards.sort(function(card1, card2){
-    //             return VALUES.indexOf(card1.value) - VALUES.indexOf(card2.value);
-    //         });
-    //     } else if (this.type == 'trio'){
-    //         this.cards.sort(function(card1, card2){
-    //             return SUITS.indexOf(card1.suit) - SUITS.indexOf(card2.suit);
-    //         });
-    //     }
-
-    // }
 }
 
 export class Table {
